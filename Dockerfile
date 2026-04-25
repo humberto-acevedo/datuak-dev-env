@@ -5,6 +5,7 @@ RUN dnf update -y && \
       awscli \
       gcc \
       git \
+      tig \
       make \
       tar \
       zip \

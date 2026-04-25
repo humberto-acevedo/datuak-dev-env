@@ -9,14 +9,16 @@ AWS_ENV := \
 build:
 	docker build -t $(IMAGE_NAME) .
 
+IDEAS_DIR=/Users/humberto_acevedo/Documents/Ideas
+
 claude:
-	docker run -it --rm -v "$$PWD/..":/workspace $(AWS_ENV) $(IMAGE_NAME) claude
+	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) claude
 
 gemini:
-	docker run -it --rm -v "$$PWD/..":/workspace $(AWS_ENV) $(IMAGE_NAME) gemini
+	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) gemini
 
 shell:
-	docker run -it --rm -v "$$PWD/..":/workspace $(AWS_ENV) $(IMAGE_NAME) /bin/bash
+	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) /bin/bash
 
 save:
 	docker save $(IMAGE_NAME) | gzip > $(IMAGE_NAME).tar.gz

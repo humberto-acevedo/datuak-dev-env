@@ -6,6 +6,7 @@ RUN dnf update -y && \
       gcc \
       git \
       tig \
+      jq \
       make \
       tar \
       zip \

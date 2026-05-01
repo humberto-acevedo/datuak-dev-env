@@ -17,7 +17,7 @@ build:
 sso-login:
 	aws sso login --profile $(AWS_PROFILE)
 
-IDEAS_DIR=/Users/humberto_acevedo/Documents/Ideas
+IDEAS_DIR=$(HOME)/Documents/Ideas
 
 claude: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \

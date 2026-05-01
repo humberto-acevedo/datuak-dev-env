@@ -1,4 +1,8 @@
+-include .env
+export
+
 IMAGE_NAME=datuak-workspace-llm
+AWS_PROFILE ?= default
 
 AWS_ENV := \
 	-e AWS_ACCESS_KEY_ID \
@@ -9,15 +13,21 @@ AWS_ENV := \
 build:
 	docker build -t $(IMAGE_NAME) .
 
+sso-login:
+	aws sso login --profile $(AWS_PROFILE)
+
 IDEAS_DIR=/Users/humberto_acevedo/Documents/Ideas
 
-claude:
+claude: sso-login
+	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) claude
 
-gemini:
+gemini: sso-login
+	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) gemini
 
-shell:
+shell: sso-login
+	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) /bin/bash
 
 save:
@@ -32,4 +42,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build claude gemini shell save load list-containers clean-stopped
+.PHONY: build sso-login claude gemini shell save load list-containers clean-stopped

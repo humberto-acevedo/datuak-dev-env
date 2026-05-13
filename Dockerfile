@@ -67,10 +67,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
       'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
       -o /tmp/kirocli.zip && \
     unzip /tmp/kirocli.zip -d /tmp/kirocli && \
-    /tmp/kirocli/kirocli/install.sh && \
+    /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli
 
-# Copy Claude settings and startup script
+# Copy Claude settings and startup script (create dir if not present locally)
 COPY .claude/ /root/.claude/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

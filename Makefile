@@ -9,7 +9,8 @@ AWS_ENV := \
 	-e AWS_SECRET_ACCESS_KEY \
 	-e AWS_SESSION_TOKEN \
 	-e AWS_REGION \
-	-e AWS_ACCOUNT
+	-e AWS_ACCOUNT \
+	-e KIRO_API_KEY
 
 build:
 	docker build -t $(IMAGE_NAME) .
@@ -27,6 +28,10 @@ gemini: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) gemini
 
+kiro: sso-login
+	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) kiro-cli
+
 shell: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) /bin/bash
@@ -43,4 +48,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build sso-login claude gemini shell save load list-containers clean-stopped
+.PHONY: build sso-login claude gemini kiro shell save load list-containers clean-stopped

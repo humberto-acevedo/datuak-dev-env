@@ -62,6 +62,14 @@ ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096
 ENV CLAUDE_CODE_ENTRYPOINT=cli
 ENV CLAUDE_CODE_USE_BEDROCK=1
 
+# Install Kiro CLI
+RUN curl --proto '=https' --tlsv1.2 -sSf \
+      'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
+      -o /tmp/kirocli.zip && \
+    unzip /tmp/kirocli.zip -d /tmp/kirocli && \
+    /tmp/kirocli/kirocli/install.sh && \
+    rm -rf /tmp/kirocli.zip /tmp/kirocli
+
 # Copy Claude settings and startup script
 COPY .claude/ /root/.claude/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

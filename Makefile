@@ -3,6 +3,8 @@ export
 
 IMAGE_NAME=datuak-workspace-llm
 AWS_PROFILE ?= default
+IDEAS_DIR=$(HOME)/Documents/Ideas
+TOOLS_CODE_DIR=$(HOME)/Development/tools-code
 
 AWS_ENV := \
 	-e AWS_ACCESS_KEY_ID \
@@ -12,29 +14,34 @@ AWS_ENV := \
 	-e AWS_ACCOUNT \
 	-e KIRO_API_KEY
 
+DOCKER_VOLUMES := \
+	-v "$$PWD/../..":/workspace \
+	-v "$(IDEAS_DIR)":/workspace/Ideas \
+	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code
+
+DOCKER_RUN := docker run -it --rm $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
+
 build:
 	docker build -t $(IMAGE_NAME) .
 
 sso-login:
 	aws sso login --profile $(AWS_PROFILE)
 
-IDEAS_DIR=$(HOME)/Documents/Ideas
-
 claude: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) claude
+	$(DOCKER_RUN) claude
 
 gemini: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) gemini
+	$(DOCKER_RUN) gemini
 
 kiro: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) kiro-cli
+	$(DOCKER_RUN) kiro-cli
 
 shell: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run -it --rm -v "$$PWD/../..":/workspace -v "$(IDEAS_DIR)":/workspace/Ideas $(AWS_ENV) $(IMAGE_NAME) /bin/bash
+	$(DOCKER_RUN) /bin/bash
 
 save:
 	docker save $(IMAGE_NAME) | gzip > $(IMAGE_NAME).tar.gz

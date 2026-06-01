@@ -24,6 +24,9 @@ DOCKER_RUN := docker run -it --rm $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
 build:
 	docker build -t $(IMAGE_NAME) .
 
+rebuild:
+	docker build --no-cache -t $(IMAGE_NAME) .
+
 sso-login:
 	aws sso login --profile $(AWS_PROFILE)
 
@@ -55,4 +58,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build sso-login claude gemini kiro shell save load list-containers clean-stopped
+.PHONY: build rebuild sso-login claude gemini kiro shell save load list-containers clean-stopped

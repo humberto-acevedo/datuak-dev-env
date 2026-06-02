@@ -1,7 +1,7 @@
 -include .env
 export
 
-IMAGE_NAME=datuak-workspace-llm
+IMAGE_NAME=datuak-workspace-antigravity
 AWS_PROFILE ?= default
 IDEAS_DIR=$(HOME)/Documents/Ideas
 TOOLS_CODE_DIR=$(HOME)/Development/tools-code
@@ -34,9 +34,9 @@ claude: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	$(DOCKER_RUN) claude
 
-gemini: sso-login
+antigravity: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	$(DOCKER_RUN) gemini
+	$(DOCKER_RUN) agy
 
 kiro: sso-login
 	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
@@ -58,4 +58,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build rebuild sso-login claude gemini kiro shell save load list-containers clean-stopped
+.PHONY: build rebuild sso-login claude antigravity kiro shell save load list-containers clean-stopped

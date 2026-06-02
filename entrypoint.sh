@@ -10,11 +10,12 @@ if [[ "${1:-}" == "kiro-cli" ]]; then
   fi
 fi
 
-# If launching gemini, fetch the API key from Secrets Manager first
-if [[ "${1:-}" == "gemini" ]]; then
+# If launching agy, fetch the API key from Secrets Manager first
+if [[ "${1:-}" == "agy" ]]; then
   SECRET_NAME="${GEMINI_SECRET_NAME:-GoogleGeminiAPIKeyiMac}"
   REGION="${AWS_REGION:-us-east-1}"
-  echo "Fetching Gemini API key from Secrets Manager (secret: $SECRET_NAME, region: $REGION)..."
+
+  echo "Fetching Antigravity/Gemini API key from Secrets Manager (secret: $SECRET_NAME, region: $REGION)..."
   GEMINI_API_KEY=$(aws secretsmanager get-secret-value \
     --secret-id "$SECRET_NAME" \
     --region "$REGION" \

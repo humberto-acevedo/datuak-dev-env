@@ -46,9 +46,8 @@ RUN rpm -qa gpg-pubkey* | grep -i google | xargs -r rpm -e || true && \
 RUN $(gcloud info --format="value(basic.python_location)") -m pip install numpy
 ENV CLOUDSDK_PYTHON_SITEPACKAGES=1
 
-# Install Gemini CLI
-RUN rm -f /usr/bin/gemini || true && \
-    npm install -g @google/gemini-cli
+# Install Antigravity CLI (agy)
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 
 # Install Claude Code CLI
 RUN curl -fsSL https://claude.ai/install.sh | sh && \

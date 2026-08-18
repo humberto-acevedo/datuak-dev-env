@@ -29,4 +29,22 @@ if [[ "${1:-}" == "agy" ]]; then
   echo "GEMINI_API_KEY set."
 fi
 
+# Ensure correct permissions on mounted SSH keys (read-only mount may have wrong perms inside container)
+if [[ -d /root/.ssh ]]; then
+  chmod 700 /root/.ssh 2>/dev/null || true
+  find /root/.ssh -type f -exec chmod 600 {} \; 2>/dev/null || true
+
+  # Trust GitHub's host key to avoid interactive prompts
+  if [[ ! -f /root/.ssh/known_hosts ]] || ! grep -q github.com /root/.ssh/known_hosts 2>/dev/null; then
+    ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+  fi
+
+  # Tell gh CLI to use SSH for git operations
+  git config --global url."git@github.com:".insteadOf "https://github.com/"
+fi
+
+# Configure git identity
+git config --global user.email "humberto.acevedo@datuak.ai"
+git config --global user.name "Humberto Acevedo"
+
 exec "$@"

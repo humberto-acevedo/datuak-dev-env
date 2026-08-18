@@ -1,7 +1,7 @@
 -include .env
 export
 
-IMAGE_NAME=datuak-workspace-antigravity
+IMAGE_NAME=datuak-workspace
 AWS_PROFILE ?= default
 IDEAS_DIR=$(HOME)/Documents/Ideas
 TOOLS_CODE_DIR=$(HOME)/Development/tools-code
@@ -17,7 +17,9 @@ AWS_ENV := \
 DOCKER_VOLUMES := \
 	-v "$$PWD/../..":/workspace \
 	-v "$(IDEAS_DIR)":/workspace/Ideas \
-	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code
+	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code \
+	-v "$(HOME)/.ssh:/root/.ssh" \
+	-v "$(HOME)/.config/gh:/root/.config/gh"
 
 DOCKER_RUN := docker run -it --rm $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
 

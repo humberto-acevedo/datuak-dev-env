@@ -46,6 +46,12 @@ RUN rpm -qa gpg-pubkey* | grep -i google | xargs -r rpm -e || true && \
 RUN $(gcloud info --format="value(basic.python_location)") -m pip install numpy
 ENV CLOUDSDK_PYTHON_SITEPACKAGES=1
 
+# Install GitHub CLI (gh)
+RUN dnf install -y 'dnf-command(config-manager)' && \
+    dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && \
+    dnf install -y gh && \
+    dnf clean all
+
 # Install Antigravity CLI (agy)
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 

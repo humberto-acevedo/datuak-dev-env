@@ -32,20 +32,26 @@ rebuild:
 sso-login:
 	aws sso login --profile $(AWS_PROFILE)
 
-claude: sso-login
-	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+ensure-sso:
+	@if ! aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1; then \
+		echo "AWS credentials expired or not present. Refreshing SSO session for profile $(AWS_PROFILE)..."; \
+		aws sso login --profile $(AWS_PROFILE); \
+	fi
+
+claude: ensure-sso
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	$(DOCKER_RUN) claude
 
-antigravity: sso-login
-	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+antigravity: ensure-sso
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	$(DOCKER_RUN) agy
 
-kiro: sso-login
-	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+kiro: ensure-sso
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	$(DOCKER_RUN) kiro-cli
 
-shell: sso-login
-	eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+shell: ensure-sso
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	$(DOCKER_RUN) /bin/bash
 
 save:
@@ -60,4 +66,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build rebuild sso-login claude antigravity kiro shell save load list-containers clean-stopped
+.PHONY: build rebuild sso-login ensure-sso claude antigravity kiro shell save load list-containers clean-stopped

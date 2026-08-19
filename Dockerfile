@@ -13,6 +13,7 @@ RUN dnf update -y && \
       curl \
       vim \
       unzip \
+      tmux \
       python3 \
       python3-pip \
       shadow-utils \

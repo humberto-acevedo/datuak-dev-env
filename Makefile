@@ -21,7 +21,7 @@ DOCKER_VOLUMES := \
 	-v "$(HOME)/.ssh:/root/.ssh" \
 	-v "$(HOME)/.config/gh:/root/.config/gh"
 
-DOCKER_RUN := docker run -it --rm $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
+DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
 
 build:
 	docker build -t $(IMAGE_NAME) .
@@ -30,7 +30,11 @@ rebuild:
 	docker build --no-cache -t $(IMAGE_NAME) .
 
 sso-login:
-	aws sso login --profile $(AWS_PROFILE)
+	@aws sso login --profile $(AWS_PROFILE)
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env)
+
+export-credentials:
+	@aws configure export-credentials --profile $(AWS_PROFILE) --format env
 
 ensure-sso:
 	@if ! aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1; then \
@@ -66,4 +70,4 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build rebuild sso-login ensure-sso claude antigravity kiro shell save load list-containers clean-stopped
+.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped

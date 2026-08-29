@@ -3,6 +3,29 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# Setup on-demand time sync utility
+cat << 'EOF' > /usr/local/bin/sync-time
+#!/bin/bash
+echo "==> Synchronizing system clock with AWS..."
+REMOTE_DATE=$(curl -sI --max-time 4 https://aws.amazon.com 2>/dev/null | grep -i '^date:' | cut -d' ' -f2- | tr -d '\r')
+if [[ -z "$REMOTE_DATE" ]]; then
+  echo "Warning: Could not fetch AWS server time to sync clock." >&2
+  exit 1
+fi
+echo "Time before sync: $(date -u)"
+if date -s "$REMOTE_DATE" >/dev/null 2>&1; then
+  echo "Time after sync : $(date -u)"
+  echo "✅ Clock successfully synchronized."
+else
+  echo "⚠️  Failed to set clock. (Did you run container with --cap-add=SYS_TIME?)" >&2
+fi
+EOF
+chmod +x /usr/local/bin/sync-time
+ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock 2>/dev/null || true
+
+# Attempt initial clock sync on startup
+/usr/local/bin/sync-time 2>/dev/null || true
+
 # If launching kiro, verify KIRO_API_KEY is set
 if [[ "${1:-}" == "kiro-cli" ]]; then
   if [[ -z "${KIRO_API_KEY:-}" ]]; then

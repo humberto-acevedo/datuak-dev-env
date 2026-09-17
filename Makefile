@@ -70,4 +70,16 @@ list-containers:
 clean-stopped:
 	docker container prune -f
 
-.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped
+verify-aws-toolkit:
+	@echo "=== AWS Agent Toolkit Verification ==="
+	@docker run --rm $(IMAGE_NAME) bash -c "echo '1. uv (Python package manager):' && pip3 show uv && echo '2. Skills CLI:' && pip3 show skills || echo 'skills not installed'" || echo "Error running verification"
+	@echo ""
+	@echo "MCP Server: mcp-proxy-for-aws@1.6.3"
+	@echo "Endpoint: https://aws-mcp.us-east-1.api.aws/mcp"
+	@echo "Timeout: 100000ms"
+
+inspect-claude-config:
+	@echo "=== Claude MCP Configuration ==="
+	@docker run --rm -v "$$PWD/.claude:/root/.claude" $(IMAGE_NAME) cat /root/.claude/settings.json 2>/dev/null || echo "No settings.json found"
+
+.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped verify-aws-toolkit inspect-claude-config

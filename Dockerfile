@@ -20,6 +20,12 @@ RUN dnf update -y && \
       util-linux-user && \
     dnf clean all
 
+# Install uv (Python package manager) for AWS MCP proxy
+RUN pip3 install --upgrade uv
+
+# Install AWS toolkit skills CLI
+RUN pip3 install skills
+
 # Install Node.js 20
 RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
     dnf install -y nodejs

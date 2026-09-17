@@ -33,6 +33,13 @@ if [[ "${1:-}" == "kiro-cli" ]]; then
   fi
 fi
 
+# Verify AWS Agent Toolkit dependencies are available
+if command -v uv &> /dev/null; then
+  echo "✅ AWS MCP dependencies available (uv installed)"
+else
+  echo "⚠️  uv not found in PATH - AWS MCP proxy may not work"
+fi
+
 # If launching agy, fetch the API key from Secrets Manager first
 if [[ "${1:-}" == "agy" ]]; then
   SECRET_NAME="${GEMINI_SECRET_NAME:-GoogleGeminiAPIKeyiMac}"

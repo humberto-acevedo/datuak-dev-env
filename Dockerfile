@@ -84,8 +84,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli
 
-# Copy Claude settings and startup script (create dir if not present locally)
+# Copy Claude and Antigravity settings and startup script
 COPY .claude/ /root/.claude/
+COPY .gemini/ /root/.gemini/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

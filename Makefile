@@ -77,9 +77,21 @@ verify-aws-toolkit:
 	@echo "MCP Server: mcp-proxy-for-aws@1.6.3"
 	@echo "Endpoint: https://aws-mcp.us-east-1.api.aws/mcp"
 	@echo "Timeout: 100000ms"
+	@echo ""
+	@echo "=== Claude MCP Configuration ==="
+	@docker run --rm $(IMAGE_NAME) cat /root/.claude/settings.json 2>/dev/null || echo "No Claude settings.json found"
+	@echo ""
+	@echo "=== Antigravity (AGY) MCP Configuration ==="
+	@docker run --rm $(IMAGE_NAME) cat /root/.gemini/config/mcp_config.json 2>/dev/null || echo "No AGY mcp_config.json found"
 
 inspect-claude-config:
 	@echo "=== Claude MCP Configuration ==="
 	@docker run --rm -v "$$PWD/.claude:/root/.claude" $(IMAGE_NAME) cat /root/.claude/settings.json 2>/dev/null || echo "No settings.json found"
 
-.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped verify-aws-toolkit inspect-claude-config
+inspect-agy-config:
+	@echo "=== Antigravity (AGY) MCP Configuration ==="
+	@docker run --rm -v "$$PWD/.gemini:/root/.gemini" $(IMAGE_NAME) cat /root/.gemini/config/mcp_config.json 2>/dev/null || echo "No mcp_config.json found"
+
+inspect-antigravity-config: inspect-agy-config
+
+.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped verify-aws-toolkit inspect-claude-config inspect-agy-config inspect-antigravity-config

@@ -40,6 +40,15 @@ else
   echo "⚠️  uv not found in PATH - AWS MCP proxy may not work"
 fi
 
+# Ensure Antigravity (AGY) MCP configuration exists
+if [[ ! -s /root/.gemini/config/mcp_config.json ]]; then
+  mkdir -p /root/.gemini/config
+  if [[ -f /workspace/llm-environments/llm-workspace/.gemini/config/mcp_config.json ]]; then
+    cp /workspace/llm-environments/llm-workspace/.gemini/config/mcp_config.json /root/.gemini/config/mcp_config.json
+  fi
+fi
+
+
 # If launching agy, fetch the API key from Secrets Manager first
 if [[ "${1:-}" == "agy" ]]; then
   SECRET_NAME="${GEMINI_SECRET_NAME:-GoogleGeminiAPIKeyiMac}"

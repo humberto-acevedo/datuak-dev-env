@@ -23,11 +23,13 @@ make antigravity
 
 | Component | Change | Impact |
 |-----------|--------|--------|
-| **Dockerfile** | Added `uv` + `skills` CLI | Enables MCP proxy for AWS |
+| **Dockerfile** | Added `uv` + `skills` CLI; copies `.claude` & `.gemini` | Enables MCP proxy for AWS |
 | **.claude/settings.json** | Created with MCP config | Claude gets AWS access |
-| **.claude/kiro-mcp-settings.json** | Created | Antigravity gets AWS access |
-| **entrypoint.sh** | Added toolkit validation | Better diagnostics |
-| **Makefile** | Added verification targets | `make verify-aws-toolkit` |
+| **.gemini/config/mcp_config.json** | Created with MCP config | Antigravity (AGY) gets AWS access |
+| **.claude/kiro-mcp-settings.json** | Created | Kiro CLI gets AWS access |
+| **entrypoint.sh** | Added toolkit & AGY config validation | Better diagnostics & reliability |
+| **Makefile** | Added verification & inspection targets | `make verify-aws-toolkit`, `make inspect-agy-config` |
+
 
 ---
 

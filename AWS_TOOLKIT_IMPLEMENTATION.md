@@ -11,15 +11,17 @@ This guide walks you through integrating the AWS Agent Toolkit into your Claude 
 ## What Changed
 
 ### Files Modified
-1. **Dockerfile** - Added `uv` and `skills` CLI installation
-2. **entrypoint.sh** - Added AWS toolkit dependency validation
-3. **Makefile** - Added diagnostic targets
+1. **Dockerfile** - Added `uv` and `skills` CLI installation, added `COPY .gemini/ /root/.gemini/`
+2. **entrypoint.sh** - Added AWS toolkit dependency and AGY MCP config validation
+3. **Makefile** - Added diagnostic & config inspection targets (`verify-aws-toolkit`, `inspect-agy-config`)
 
 ### Files Created
 1. **.claude/settings.json** - Claude MCP server configuration
-2. **.claude/kiro-mcp-settings.json** - Kiro/Antigravity MCP configuration
-3. **AWS_AGENT_TOOLKIT_REVIEW.md** - Detailed review document
-4. **AWS_TOOLKIT_IMPLEMENTATION.md** - This guide
+2. **.gemini/config/mcp_config.json** - Antigravity (AGY) MCP server configuration
+3. **.claude/kiro-mcp-settings.json** - Kiro CLI MCP configuration
+4. **AWS_AGENT_TOOLKIT_REVIEW.md** - Detailed review document
+5. **AWS_TOOLKIT_IMPLEMENTATION.md** - This guide
+
 
 ---
 

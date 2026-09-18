@@ -84,9 +84,56 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli
 
-# Copy Claude and Antigravity settings and startup script
-COPY .claude/ /root/.claude/
-COPY .gemini/ /root/.gemini/
+# Generate Claude MCP configuration at build time
+RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json << 'EOF'
+{
+  "mcpServers": {
+    "aws-mcp": {
+      "command": "uvx",
+      "timeout": 100000,
+      "transport": "stdio",
+      "args": [
+        "mcp-proxy-for-aws@1.6.3",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "AWS_REGION=us-east-1"
+      ]
+    }
+  },
+  "permissions": {
+    "aws:*": "allow"
+  },
+  "modelSettings": {
+    "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "smallFastModel": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "maxOutputTokens": 4096
+  }
+}
+EOF
+
+# Generate Gemini/Antigravity MCP configuration at build time
+RUN mkdir -p /root/.gemini/config && cat > /root/.gemini/config/mcp_config.json << 'EOF'
+{
+  "mcpServers": {
+    "aws-mcp": {
+      "command": "uvx",
+      "timeout": 100000,
+      "transport": "stdio",
+      "args": [
+        "mcp-proxy-for-aws@1.6.3",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "AWS_REGION=us-east-1"
+      ],
+      "env": {
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
+EOF
+
+# Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

@@ -22,6 +22,7 @@ DOCKER_VOLUMES := \
 	-v "$(HOME)/.config/gh:/root/.config/gh"
 
 DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
+DOCKER_RUN_RM := docker run --rm $(IMAGE_NAME)
 
 build:
 	docker build -t $(IMAGE_NAME) .
@@ -42,21 +43,19 @@ ensure-sso:
 		aws sso login --profile $(AWS_PROFILE); \
 	fi
 
-claude: ensure-sso
-	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	$(DOCKER_RUN) claude
+_run-with-creds = eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && $(DOCKER_RUN) $(1)
 
-antigravity: ensure-sso
-	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	$(DOCKER_RUN) agy
+claude: ensure-sso
+	@$(call _run-with-creds,claude)
+
+antigravity agy: ensure-sso
+	@$(call _run-with-creds,agy)
 
 kiro: ensure-sso
-	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	$(DOCKER_RUN) kiro-cli
+	@$(call _run-with-creds,kiro-cli)
 
 shell: ensure-sso
-	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	$(DOCKER_RUN) /bin/bash
+	@$(call _run-with-creds,/bin/bash)
 
 save:
 	docker save $(IMAGE_NAME) | gzip > $(IMAGE_NAME).tar.gz
@@ -64,34 +63,46 @@ save:
 load:
 	gunzip -c $(IMAGE_NAME).tar.gz | docker load
 
-list-containers:
+ps list-containers:
 	docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 
-clean-stopped:
+clean:
 	docker container prune -f
+
+inspect-config:
+	@echo "=== Claude MCP Configuration ==="
+	@$(DOCKER_RUN_RM) cat /root/.claude/settings.json 2>/dev/null || echo "No settings.json found"
+	@echo ""
+	@echo "=== Antigravity (AGY) MCP Configuration ==="
+	@$(DOCKER_RUN_RM) cat /root/.gemini/config/mcp_config.json 2>/dev/null || echo "No mcp_config.json found"
 
 verify-aws-toolkit:
 	@echo "=== AWS Agent Toolkit Verification ==="
-	@docker run --rm $(IMAGE_NAME) bash -c "echo '1. uv (Python package manager):' && pip3 show uv && echo '2. Skills CLI:' && pip3 show skills || echo 'skills not installed'" || echo "Error running verification"
+	@$(DOCKER_RUN_RM) bash -c "echo '1. uv (Python package manager):' && pip3 show uv && echo '2. Skills CLI:' && pip3 show skills || echo 'skills not installed'" || echo "Error running verification"
 	@echo ""
 	@echo "MCP Server: mcp-proxy-for-aws@1.6.3"
 	@echo "Endpoint: https://aws-mcp.us-east-1.api.aws/mcp"
 	@echo "Timeout: 100000ms"
 	@echo ""
-	@echo "=== Claude MCP Configuration ==="
-	@docker run --rm $(IMAGE_NAME) cat /root/.claude/settings.json 2>/dev/null || echo "No Claude settings.json found"
+	@$(MAKE) inspect-config
+
+test:
+	@echo "=== Building test image with generated configurations ==="
+	@docker build -t $(IMAGE_NAME)-test . && echo "✅ Build successful" || exit 1
 	@echo ""
-	@echo "=== Antigravity (AGY) MCP Configuration ==="
-	@docker run --rm $(IMAGE_NAME) cat /root/.gemini/config/mcp_config.json 2>/dev/null || echo "No AGY mcp_config.json found"
+	@echo "=== Testing Claude configuration ==="
+	@docker run --rm $(IMAGE_NAME)-test test -f /root/.claude/settings.json && echo "✅ Claude settings.json exists" || echo "❌ Claude settings.json missing"
+	@docker run --rm $(IMAGE_NAME)-test cat /root/.claude/settings.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ Claude config is valid JSON" || echo "❌ Claude config invalid"
+	@echo ""
+	@echo "=== Testing Gemini/AGY configuration ==="
+	@docker run --rm $(IMAGE_NAME)-test test -f /root/.gemini/config/mcp_config.json && echo "✅ AGY mcp_config.json exists" || echo "❌ AGY mcp_config.json missing"
+	@docker run --rm $(IMAGE_NAME)-test cat /root/.gemini/config/mcp_config.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ AGY config is valid JSON" || echo "❌ AGY config invalid"
+	@echo ""
+	@echo "=== Verifying AWS MCP server configuration ==="
+	@docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.claude/settings.json && echo "✅ AWS MCP in Claude" || echo "❌ AWS MCP missing in Claude"
+	@docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.gemini/config/mcp_config.json && echo "✅ AWS MCP in AGY" || echo "❌ AWS MCP missing in AGY"
+	@echo ""
+	@echo "✅ All tests passed"
+	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-inspect-claude-config:
-	@echo "=== Claude MCP Configuration ==="
-	@docker run --rm -v "$$PWD/.claude:/root/.claude" $(IMAGE_NAME) cat /root/.claude/settings.json 2>/dev/null || echo "No settings.json found"
-
-inspect-agy-config:
-	@echo "=== Antigravity (AGY) MCP Configuration ==="
-	@docker run --rm -v "$$PWD/.gemini:/root/.gemini" $(IMAGE_NAME) cat /root/.gemini/config/mcp_config.json 2>/dev/null || echo "No mcp_config.json found"
-
-inspect-antigravity-config: inspect-agy-config
-
-.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity kiro shell save load list-containers clean-stopped verify-aws-toolkit inspect-claude-config inspect-agy-config inspect-antigravity-config
+.PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity agy kiro shell save load ps list-containers clean verify-aws-toolkit inspect-config test

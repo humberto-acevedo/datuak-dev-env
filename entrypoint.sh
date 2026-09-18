@@ -40,12 +40,9 @@ else
   echo "⚠️  uv not found in PATH - AWS MCP proxy may not work"
 fi
 
-# Ensure Antigravity (AGY) MCP configuration exists
+# Verify Antigravity (AGY) MCP configuration exists (generated at build time)
 if [[ ! -s /root/.gemini/config/mcp_config.json ]]; then
-  mkdir -p /root/.gemini/config
-  if [[ -f /workspace/llm-environments/llm-workspace/.gemini/config/mcp_config.json ]]; then
-    cp /workspace/llm-environments/llm-workspace/.gemini/config/mcp_config.json /root/.gemini/config/mcp_config.json
-  fi
+  echo "⚠️  Warning: AGY MCP configuration not found. This should have been generated at build time."
 fi
 
 

@@ -21,7 +21,7 @@ else
 fi
 
 # Verify Antigravity (AGY) MCP configuration exists (generated at build time)
-if [[ ! -s /root/.gemini/config/mcp_config.json ]]; then
+if [[ ! -s "${HOME}/.gemini/config/mcp_config.json" ]]; then
   echo "⚠️  Warning: AGY MCP configuration not found. This should have been generated at build time."
 fi
 
@@ -47,13 +47,13 @@ if [[ "${1:-}" == "agy" ]]; then
 fi
 
 # Ensure correct permissions on mounted SSH keys (read-only mount may have wrong perms inside container)
-if [[ -d /root/.ssh ]]; then
-  chmod 700 /root/.ssh 2>/dev/null || true
-  find /root/.ssh -type f -exec chmod 600 {} \; 2>/dev/null || true
+if [[ -d "${HOME}/.ssh" ]]; then
+  chmod 700 "${HOME}/.ssh" 2>/dev/null || true
+  find "${HOME}/.ssh" -type f -exec chmod 600 {} \; 2>/dev/null || true
 
   # Trust GitHub's host key to avoid interactive prompts
-  if [[ ! -f /root/.ssh/known_hosts ]] || ! grep -q github.com /root/.ssh/known_hosts 2>/dev/null; then
-    ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+  if [[ ! -f "${HOME}/.ssh/known_hosts" ]] || ! grep -q github.com "${HOME}/.ssh/known_hosts" 2>/dev/null; then
+    ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
   fi
 
   # Tell gh CLI to use SSH for git operations

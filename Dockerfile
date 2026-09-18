@@ -68,7 +68,8 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \
     sh /tmp/claude-install.sh && \
     rm /tmp/claude-install.sh && \
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> /root/.bashrc
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> /root/.bashrc && \
+    ln -sf /root/.local/bin/claude /usr/local/bin/claude
 
 # Claude Bedrock config
 ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
@@ -88,61 +89,59 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli
 
+# Create non-root user early so configs go directly into their home
+RUN useradd -m -s /bin/bash devuser && \
+    mkdir -p /workspace && \
+    chown -R devuser:devuser /workspace && \
+    dnf install -y sudo && \
+    echo "devuser ALL=(root) NOPASSWD: /usr/bin/date" > /etc/sudoers.d/devuser-date && \
+    chmod 440 /etc/sudoers.d/devuser-date
+
 # MCP server configuration variables
 ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp
 ARG MCP_AWS_VERSION=1.6.3
 ARG AWS_REGION=us-east-1
 
-# Generate Claude MCP configuration at build time
-RUN mkdir -p /root/.claude && \
-    cat > /root/.claude/settings.json << 'EOF'
-{
-  "mcpServers": {
-    "aws-mcp": {
-      "command": "uvx",
-      "timeout": 100000,
-      "transport": "stdio",
-      "args": [
-        "mcp-proxy-for-aws@1.6.3",
-        "https://aws-mcp.us-east-1.api.aws/mcp",
-        "--metadata",
-        "AWS_REGION=us-east-1"
-      ]
-    }
-  },
-  "permissions": {
-    "aws:*": "allow"
-  },
-  "modelSettings": {
-    "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "smallFastModel": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "maxOutputTokens": 4096
-  }
-}
-EOF
+# Generate both MCP configurations from shared ARG values (single source of truth)
+RUN python3 - << 'PYEOF'
+import json, os
 
-# Generate Gemini/Antigravity MCP configuration at build time
-RUN mkdir -p /root/.gemini/config && \
-    cat > /root/.gemini/config/mcp_config.json << 'EOF'
-{
-  "mcpServers": {
-    "aws-mcp": {
-      "command": "uvx",
-      "timeout": 100000,
-      "transport": "stdio",
-      "args": [
-        "mcp-proxy-for-aws@1.6.3",
-        "https://aws-mcp.us-east-1.api.aws/mcp",
-        "--metadata",
-        "AWS_REGION=us-east-1"
-      ],
-      "env": {
-        "AWS_REGION": "us-east-1"
-      }
-    }
-  }
+endpoint = os.environ.get("MCP_AWS_ENDPOINT", "https://aws-mcp.us-east-1.api.aws/mcp")
+version  = os.environ.get("MCP_AWS_VERSION",  "1.6.3")
+region   = os.environ.get("AWS_REGION",        "us-east-1")
+
+proxy_args = [
+    f"mcp-proxy-for-aws@{version}",
+    endpoint,
+    "--metadata",
+    f"AWS_REGION={region}",
+]
+proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
+
+claude_cfg = {
+    "mcpServers": {"aws-mcp": proxy_base},
+    "permissions": {"aws:*": "allow"},
+    "modelSettings": {
+        "model":          os.environ.get("ANTHROPIC_MODEL",           "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+        "smallFastModel": os.environ.get("ANTHROPIC_SMALL_FAST_MODEL","global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+        "maxOutputTokens": 4096,
+    },
 }
-EOF
+agy_cfg = {
+    "mcpServers": {"aws-mcp": {**proxy_base, "env": {"AWS_REGION": region}}},
+}
+
+os.makedirs("/home/devuser/.claude",        exist_ok=True)
+os.makedirs("/home/devuser/.gemini/config", exist_ok=True)
+
+with open("/home/devuser/.claude/settings.json",        "w") as f:
+    json.dump(claude_cfg, f, indent=2)
+with open("/home/devuser/.gemini/config/mcp_config.json", "w") as f:
+    json.dump(agy_cfg, f, indent=2)
+
+os.system("chown -R devuser:devuser /home/devuser/.claude /home/devuser/.gemini")
+print("✅ MCP configurations generated")
+PYEOF
 
 # Bake sync-time utility script into image at build time
 RUN cat > /usr/local/bin/sync-time << 'SCRIPT'
@@ -154,7 +153,7 @@ if [[ -z "$REMOTE_DATE" ]]; then
   exit 1
 fi
 echo "Time before sync: $(date -u)"
-if date -s "$REMOTE_DATE" >/dev/null 2>&1; then
+if sudo date -s "$REMOTE_DATE" >/dev/null 2>&1; then
   echo "Time after sync : $(date -u)"
   echo "✅ Clock successfully synchronized."
 else
@@ -164,15 +163,13 @@ SCRIPT
 RUN chmod +x /usr/local/bin/sync-time && \
     ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock
 
-# Create non-root user for development
-RUN useradd -m -s /bin/bash devuser && \
-    mkdir -p /workspace && \
-    chown -R devuser:devuser /workspace
-
 # Copy entrypoint script and set as executable
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Switch to non-root user for runtime
+ENV HOME=/home/devuser
+USER devuser
 WORKDIR /workspace
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

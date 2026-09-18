@@ -18,8 +18,8 @@ DOCKER_VOLUMES := \
 	-v "$$PWD/../..":/workspace \
 	-v "$(IDEAS_DIR)":/workspace/Ideas \
 	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code \
-	-v "$(HOME)/.ssh:/root/.ssh:ro" \
-	-v "$(HOME)/.config/gh:/root/.config/gh:ro"
+	-v "$(HOME)/.ssh:/home/devuser/.ssh:ro" \
+	-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro"
 
 DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
 DOCKER_RUN_RM := docker run --rm $(IMAGE_NAME)

@@ -3,27 +3,7 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
 
-# Setup on-demand time sync utility
-cat << 'EOF' > /usr/local/bin/sync-time
-#!/bin/bash
-echo "==> Synchronizing system clock with AWS..."
-REMOTE_DATE=$(curl -sI --max-time 4 https://aws.amazon.com 2>/dev/null | grep -i '^date:' | cut -d' ' -f2- | tr -d '\r')
-if [[ -z "$REMOTE_DATE" ]]; then
-  echo "Warning: Could not fetch AWS server time to sync clock." >&2
-  exit 1
-fi
-echo "Time before sync: $(date -u)"
-if date -s "$REMOTE_DATE" >/dev/null 2>&1; then
-  echo "Time after sync : $(date -u)"
-  echo "✅ Clock successfully synchronized."
-else
-  echo "⚠️  Failed to set clock. (Did you run container with --cap-add=SYS_TIME?)" >&2
-fi
-EOF
-chmod +x /usr/local/bin/sync-time
-ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock 2>/dev/null || true
-
-# Attempt initial clock sync on startup
+# Attempt initial clock sync on startup (script baked into image)
 /usr/local/bin/sync-time 2>/dev/null || true
 
 # If launching kiro, verify KIRO_API_KEY is set
@@ -46,9 +26,10 @@ if [[ ! -s /root/.gemini/config/mcp_config.json ]]; then
 fi
 
 
-# If launching agy, fetch the API key from Secrets Manager first
+# If launching agy, fetch the API key from Secrets Manager
 if [[ "${1:-}" == "agy" ]]; then
   SECRET_NAME="${GEMINI_SECRET_NAME:-GoogleGeminiAPIKeyiMac}"
+  MCP_ENDPOINT="${MCP_AWS_ENDPOINT:-https://aws-mcp.us-east-1.api.aws/mcp}"
   REGION="${AWS_REGION:-us-east-1}"
 
   echo "Fetching Antigravity/Gemini API key from Secrets Manager (secret: $SECRET_NAME, region: $REGION)..."
@@ -61,7 +42,7 @@ if [[ "${1:-}" == "agy" ]]; then
     echo "Error: Could not retrieve secret '$SECRET_NAME'." >&2
     exit 1
   fi
-  export GEMINI_API_KEY
+  export GEMINI_API_KEY MCP_ENDPOINT
   echo "GEMINI_API_KEY set."
 fi
 
@@ -79,8 +60,8 @@ if [[ -d /root/.ssh ]]; then
   git config --global url."git@github.com:".insteadOf "https://github.com/"
 fi
 
-# Configure git identity
-git config --global user.email "humberto.acevedo@datuak.ai"
-git config --global user.name "Humberto Acevedo"
+# Configure git identity (parameterized for multi-user support)
+git config --global user.email "${GIT_USER_EMAIL:-humberto.acevedo@datuak.ai}"
+git config --global user.name "${GIT_USER_NAME:-Humberto Acevedo}"
 
 exec "$@"

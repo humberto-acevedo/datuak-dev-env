@@ -31,7 +31,7 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
     dnf install -y nodejs
 
 # Install Rust
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y && \
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y && \
     echo 'source /root/.cargo/env' >> /root/.bashrc
 
 # Install AWS CDK
@@ -60,10 +60,14 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     dnf clean all
 
 # Install Antigravity CLI (agy)
-RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh && \
+    cat /tmp/agy-install.sh | bash && \
+    rm /tmp/agy-install.sh
 
 # Install Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh | sh && \
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \
+    sh /tmp/claude-install.sh && \
+    rm /tmp/claude-install.sh && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> /root/.bashrc
 
 # Claude Bedrock config
@@ -84,8 +88,14 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli
 
+# MCP server configuration variables
+ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp
+ARG MCP_AWS_VERSION=1.6.3
+ARG AWS_REGION=us-east-1
+
 # Generate Claude MCP configuration at build time
-RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json << 'EOF'
+RUN mkdir -p /root/.claude && \
+    cat > /root/.claude/settings.json << 'EOF'
 {
   "mcpServers": {
     "aws-mcp": {
@@ -112,7 +122,8 @@ RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json << 'EOF'
 EOF
 
 # Generate Gemini/Antigravity MCP configuration at build time
-RUN mkdir -p /root/.gemini/config && cat > /root/.gemini/config/mcp_config.json << 'EOF'
+RUN mkdir -p /root/.gemini/config && \
+    cat > /root/.gemini/config/mcp_config.json << 'EOF'
 {
   "mcpServers": {
     "aws-mcp": {
@@ -133,7 +144,32 @@ RUN mkdir -p /root/.gemini/config && cat > /root/.gemini/config/mcp_config.json 
 }
 EOF
 
-# Copy entrypoint script
+# Bake sync-time utility script into image at build time
+RUN cat > /usr/local/bin/sync-time << 'SCRIPT'
+#!/bin/bash
+echo "==> Synchronizing system clock with AWS..."
+REMOTE_DATE=$(curl -sI --max-time 4 https://aws.amazon.com 2>/dev/null | grep -i '^date:' | cut -d' ' -f2- | tr -d '\r')
+if [[ -z "$REMOTE_DATE" ]]; then
+  echo "Warning: Could not fetch AWS server time to sync clock." >&2
+  exit 1
+fi
+echo "Time before sync: $(date -u)"
+if date -s "$REMOTE_DATE" >/dev/null 2>&1; then
+  echo "Time after sync : $(date -u)"
+  echo "✅ Clock successfully synchronized."
+else
+  echo "⚠️  Failed to set clock. (Did you run container with --cap-add=SYS_TIME?)" >&2
+fi
+SCRIPT
+RUN chmod +x /usr/local/bin/sync-time && \
+    ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock
+
+# Create non-root user for development
+RUN useradd -m -s /bin/bash devuser && \
+    mkdir -p /workspace && \
+    chown -R devuser:devuser /workspace
+
+# Copy entrypoint script and set as executable
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

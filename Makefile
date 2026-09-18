@@ -18,8 +18,8 @@ DOCKER_VOLUMES := \
 	-v "$$PWD/../..":/workspace \
 	-v "$(IDEAS_DIR)":/workspace/Ideas \
 	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code \
-	-v "$(HOME)/.ssh:/root/.ssh" \
-	-v "$(HOME)/.config/gh:/root/.config/gh"
+	-v "$(HOME)/.ssh:/root/.ssh:ro" \
+	-v "$(HOME)/.config/gh:/root/.config/gh:ro"
 
 DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
 DOCKER_RUN_RM := docker run --rm $(IMAGE_NAME)
@@ -87,22 +87,22 @@ verify-aws-toolkit:
 	@$(MAKE) inspect-config
 
 test:
-	@echo "=== Building test image with generated configurations ==="
-	@docker build -t $(IMAGE_NAME)-test . && echo "✅ Build successful" || exit 1
+	@echo "=== Building test image with generated configurations ===" && \
+	docker build -t $(IMAGE_NAME)-test . || { echo "❌ Build failed"; exit 1; } && echo "✅ Build successful"
 	@echo ""
-	@echo "=== Testing Claude configuration ==="
-	@docker run --rm $(IMAGE_NAME)-test test -f /root/.claude/settings.json && echo "✅ Claude settings.json exists" || echo "❌ Claude settings.json missing"
-	@docker run --rm $(IMAGE_NAME)-test cat /root/.claude/settings.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ Claude config is valid JSON" || echo "❌ Claude config invalid"
+	@echo "=== Testing Claude configuration ===" && \
+	docker run --rm $(IMAGE_NAME)-test test -f /root/.claude/settings.json && echo "✅ Claude settings.json exists" || { echo "❌ Claude settings.json missing"; exit 1; } && \
+	docker run --rm $(IMAGE_NAME)-test cat /root/.claude/settings.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ Claude config is valid JSON" || { echo "❌ Claude config invalid"; exit 1; }
 	@echo ""
-	@echo "=== Testing Gemini/AGY configuration ==="
-	@docker run --rm $(IMAGE_NAME)-test test -f /root/.gemini/config/mcp_config.json && echo "✅ AGY mcp_config.json exists" || echo "❌ AGY mcp_config.json missing"
-	@docker run --rm $(IMAGE_NAME)-test cat /root/.gemini/config/mcp_config.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ AGY config is valid JSON" || echo "❌ AGY config invalid"
+	@echo "=== Testing Gemini/AGY configuration ===" && \
+	docker run --rm $(IMAGE_NAME)-test test -f /root/.gemini/config/mcp_config.json && echo "✅ AGY mcp_config.json exists" || { echo "❌ AGY mcp_config.json missing"; exit 1; } && \
+	docker run --rm $(IMAGE_NAME)-test cat /root/.gemini/config/mcp_config.json 2>/dev/null | python3 -m json.tool >/dev/null && echo "✅ AGY config is valid JSON" || { echo "❌ AGY config invalid"; exit 1; }
 	@echo ""
-	@echo "=== Verifying AWS MCP server configuration ==="
-	@docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.claude/settings.json && echo "✅ AWS MCP in Claude" || echo "❌ AWS MCP missing in Claude"
-	@docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.gemini/config/mcp_config.json && echo "✅ AWS MCP in AGY" || echo "❌ AWS MCP missing in AGY"
+	@echo "=== Verifying AWS MCP server configuration ===" && \
+	docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.claude/settings.json && echo "✅ AWS MCP in Claude" || { echo "❌ AWS MCP missing in Claude"; exit 1; } && \
+	docker run --rm $(IMAGE_NAME)-test grep -q "mcp-proxy-for-aws" /root/.gemini/config/mcp_config.json && echo "✅ AWS MCP in AGY" || { echo "❌ AWS MCP missing in AGY"; exit 1; }
 	@echo ""
-	@echo "✅ All tests passed"
-	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
+	@echo "✅ All tests passed" && \
+	docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
 .PHONY: build rebuild sso-login export-credentials ensure-sso claude antigravity agy kiro shell save load ps list-containers clean verify-aws-toolkit inspect-config test

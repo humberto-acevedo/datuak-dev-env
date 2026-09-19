@@ -87,9 +87,10 @@ ENV ANTHROPIC_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
 ENV ANTHROPIC_SMALL_FAST_MODEL=global.anthropic.claude-sonnet-4-5-20250929-v1:0
 ENV ANTHROPIC_LARGE_MODEL=global.anthropic.claude-opus-5-20250514-v1:0
 ENV ANTHROPIC_ULTRA_FAST_MODEL=global.anthropic.claude-fable-5-1-20250514-v1:0
-ENV ANTHROPIC_BEDROCK_HAIKU=us.anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_BEDROCK_SONNET=us.anthropic.claude-sonnet-4-5-20250929-v1:0
-ENV ANTHROPIC_BEDROCK_OPUS=us.anthropic.claude-opus-5-20250514-v1:0
+ENV ANTHROPIC_BEDROCK_HAIKU=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Haiku\ 4.5
+ENV ANTHROPIC_BEDROCK_SONNET=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Sonnet\ 4.5
+ENV ANTHROPIC_BEDROCK_OPUS=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Opus\ 5
+ENV ANTHROPIC_BEDROCK_FABLE=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Fable\ 5.1
 ENV ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096
 ENV CLAUDE_CODE_ENTRYPOINT=cli
@@ -141,13 +142,15 @@ use_bedrock = env_mode == "production"
 
 # Select model endpoints based on environment
 if use_bedrock:
-    model = os.environ.get("ANTHROPIC_BEDROCK_HAIKU", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
-    small_fast = os.environ.get("ANTHROPIC_BEDROCK_SONNET", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
-    large = os.environ.get("ANTHROPIC_BEDROCK_OPUS", "us.anthropic.claude-opus-5-20250514-v1:0")
+    model = os.environ.get("ANTHROPIC_BEDROCK_HAIKU", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Haiku 4.5")
+    small_fast = os.environ.get("ANTHROPIC_BEDROCK_SONNET", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Sonnet 4.5")
+    large = os.environ.get("ANTHROPIC_BEDROCK_OPUS", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Opus 5")
+    ultra_fast = os.environ.get("ANTHROPIC_BEDROCK_FABLE", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Fable 5.1")
 else:
     model = os.environ.get("ANTHROPIC_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
     small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
     large = os.environ.get("ANTHROPIC_LARGE_MODEL", "global.anthropic.claude-opus-5-20250514-v1:0")
+    ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL", "global.anthropic.claude-fable-5-1-20250514-v1:0")
 
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},

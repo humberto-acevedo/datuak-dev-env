@@ -4,6 +4,15 @@ set -euo pipefail
 # Tools (claude, agy, kiro) are installed globally to /usr/local/bin at build time
 # so no extra PATH manipulation is needed here.
 
+# Show Claude environment configuration
+CLAUDE_ENV="${CLAUDE_ENVIRONMENT:-development}"
+echo "🤖 Claude Environment: $CLAUDE_ENV"
+if [[ "$CLAUDE_ENV" == "production" ]]; then
+  echo "   → Using AWS Bedrock endpoints (VPC-isolated, 10% cost premium)"
+else
+  echo "   → Using Global endpoints (cost-efficient, all models including Fable)"
+fi
+
 # Attempt initial clock sync on startup (script baked into image)
 /usr/local/bin/sync-time 2>/dev/null || true
 

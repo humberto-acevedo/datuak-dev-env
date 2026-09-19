@@ -77,13 +77,22 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
     cp -L /root/.local/bin/claude /usr/local/bin/claude && \
     chmod a+rx /usr/local/bin/claude
 
-# Claude Bedrock config
-ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
+# Claude model configuration - hybrid-ready (Global by default, Bedrock on demand)
+# Set CLAUDE_ENVIRONMENT=production to use Bedrock endpoints for VPC isolation
+# Default: Global endpoints (cost-efficient, lower latency, access to all models including Fable)
+# Production: Bedrock endpoints (VPC isolated, compliance-ready, 10% cost premium, no Fable 5.1)
+# Pricing: Anthropic API Global = Bedrock Global; Regional adds 10% surcharge
+ENV CLAUDE_ENVIRONMENT=development
+ENV ANTHROPIC_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
 ENV ANTHROPIC_SMALL_FAST_MODEL=global.anthropic.claude-sonnet-4-5-20250929-v1:0
+ENV ANTHROPIC_LARGE_MODEL=global.anthropic.claude-opus-5-20250514-v1:0
+ENV ANTHROPIC_ULTRA_FAST_MODEL=global.anthropic.claude-fable-5-1-20250514-v1:0
+ENV ANTHROPIC_BEDROCK_HAIKU=us.anthropic.claude-haiku-4-5-20251001-v1:0
+ENV ANTHROPIC_BEDROCK_SONNET=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+ENV ANTHROPIC_BEDROCK_OPUS=us.anthropic.claude-opus-5-20250514-v1:0
 ENV ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096
 ENV CLAUDE_CODE_ENTRYPOINT=cli
-ENV CLAUDE_CODE_USE_BEDROCK=1
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
@@ -126,12 +135,26 @@ proxy_args = [
 ]
 proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
 
+# Determine which endpoint tier to use based on CLAUDE_ENVIRONMENT
+env_mode = os.environ.get("CLAUDE_ENVIRONMENT", "development").lower()
+use_bedrock = env_mode == "production"
+
+# Select model endpoints based on environment
+if use_bedrock:
+    model = os.environ.get("ANTHROPIC_BEDROCK_HAIKU", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    small_fast = os.environ.get("ANTHROPIC_BEDROCK_SONNET", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    large = os.environ.get("ANTHROPIC_BEDROCK_OPUS", "us.anthropic.claude-opus-5-20250514-v1:0")
+else:
+    model = os.environ.get("ANTHROPIC_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+    small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    large = os.environ.get("ANTHROPIC_LARGE_MODEL", "global.anthropic.claude-opus-5-20250514-v1:0")
+
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},
     "permissions": {"aws:*": "allow"},
     "modelSettings": {
-        "model":          os.environ.get("ANTHROPIC_MODEL",           "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
-        "smallFastModel": os.environ.get("ANTHROPIC_SMALL_FAST_MODEL","global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+        "model": model,
+        "smallFastModel": small_fast,
         "maxOutputTokens": 4096,
     },
 }

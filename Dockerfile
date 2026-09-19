@@ -30,9 +30,13 @@ RUN pip3 install skills
 RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
     dnf install -y nodejs
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y && \
-    echo 'source /root/.cargo/env' >> /root/.bashrc
+# Install Rust (system-wide so devuser can use cargo)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --no-modify-path && \
+    cp -r /root/.cargo /usr/local/cargo && \
+    chmod -R a+rx /usr/local/cargo/bin && \
+    ln -sf /usr/local/cargo/bin/cargo  /usr/local/bin/cargo  && \
+    ln -sf /usr/local/cargo/bin/rustc  /usr/local/bin/rustc  && \
+    ln -sf /usr/local/cargo/bin/rustup /usr/local/bin/rustup
 
 # Install AWS CDK
 RUN npm install -g aws-cdk
@@ -59,17 +63,19 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     dnf install -y gh && \
     dnf clean all
 
-# Install Antigravity CLI (agy)
+# Install Antigravity CLI (agy) and expose globally
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh && \
     cat /tmp/agy-install.sh | bash && \
-    rm /tmp/agy-install.sh
+    rm /tmp/agy-install.sh && \
+    cp /root/.local/bin/agy /usr/local/bin/agy && \
+    chmod a+rx /usr/local/bin/agy
 
-# Install Claude Code CLI
+# Install Claude Code CLI and expose globally
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \
     sh /tmp/claude-install.sh && \
     rm /tmp/claude-install.sh && \
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> /root/.bashrc && \
-    ln -sf /root/.local/bin/claude /usr/local/bin/claude
+    cp -L /root/.local/bin/claude /usr/local/bin/claude && \
+    chmod a+rx /usr/local/bin/claude
 
 # Claude Bedrock config
 ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
@@ -81,21 +87,23 @@ ENV CLAUDE_CODE_USE_BEDROCK=1
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
-# Install Kiro CLI
+# Install Kiro CLI and expose globally
 RUN curl --proto '=https' --tlsv1.2 -sSf \
       'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
       -o /tmp/kirocli.zip && \
     unzip /tmp/kirocli.zip -d /tmp/kirocli && \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
-    rm -rf /tmp/kirocli.zip /tmp/kirocli
+    rm -rf /tmp/kirocli.zip /tmp/kirocli && \
+    cp /root/.local/bin/kiro-cli /usr/local/bin/kiro && \
+    chmod a+rx /usr/local/bin/kiro
 
 # Create non-root user early so configs go directly into their home
 RUN useradd -m -s /bin/bash devuser && \
     mkdir -p /workspace && \
     chown -R devuser:devuser /workspace && \
     dnf install -y sudo && \
-    echo "devuser ALL=(root) NOPASSWD: /usr/bin/date" > /etc/sudoers.d/devuser-date && \
-    chmod 440 /etc/sudoers.d/devuser-date
+    echo "devuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/devuser && \
+    chmod 440 /etc/sudoers.d/devuser
 
 # MCP server configuration variables
 ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp

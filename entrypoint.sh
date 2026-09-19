@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-export PATH="$HOME/.local/bin:$PATH"
+# Tools (claude, agy, kiro) are installed globally to /usr/local/bin at build time
+# so no extra PATH manipulation is needed here.
 
 # Attempt initial clock sync on startup (script baked into image)
 /usr/local/bin/sync-time 2>/dev/null || true

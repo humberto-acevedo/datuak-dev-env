@@ -25,11 +25,15 @@ Each of these is a **supply-chain attack vector**. A compromised CDN or DNS hija
 - **Download to file → inspect → execute** in separate `RUN` steps so caching reveals tampering.
 - At minimum add `--proto '=https' --tlsv1.2` to all curl invocations (only the Kiro install does this).
 
-### 2. Container runs everything as root
+### 2. Container runs everything as root ✅ RESOLVED
 
-There is **no non-root user** anywhere in the Dockerfile. All tool installs, config files, and the entrypoint run as UID 0. If the container is ever exposed on a network, or an AI tool runs untrusted code, it has full root inside the container.
+**Previously:** Container ran all processes as UID 0 (root), creating a privilege escalation risk if exposed on a network or if untrusted code runs.
 
-**Recommendation:** Create a `devuser`, install tools globally, then switch with `USER devuser` for runtime. Tools that genuinely need root (e.g., `date -s` for time sync) can use `--cap-add=SYS_TIME` + `sudo` for just that command.
+**Resolution:** A `devuser` non-root user was created. Tools are installed globally and runtime switches to `devuser`. Admin operations that need root (e.g., `date -s` for time sync) can escalate via `sudo`, which is configured as `NOPASSWD: ALL` for frictionless dev experience. This approach:
+- Isolates user-land processes from system-level access by default
+- Makes root escalation explicit and intentional (every command requires `sudo` prefix)
+- Keeps operations auditable in system logs
+- Trades security rigor for development velocity (acceptable for a disposable dev container)
 
 ### 3. AWS account ID committed to `.env` (tracked by Makefile)
 

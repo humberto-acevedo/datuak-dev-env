@@ -77,13 +77,13 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
     cp -L /root/.local/bin/claude /usr/local/bin/claude && \
     chmod a+rx /usr/local/bin/claude
 
-# Claude model configuration - AWS Bedrock regional endpoints (single-region, VPC-isolatable)
-ENV ANTHROPIC_MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_SMALL_FAST_MODEL=anthropic.claude-sonnet-5-20250930-v1:0
-ENV ANTHROPIC_LARGE_MODEL=anthropic.claude-opus-5-20250617-v1:0
-ENV ANTHROPIC_ULTRA_FAST_MODEL=anthropic.claude-fable-5-1-20250617-v1:0
+# Claude model configuration - AWS Bedrock cross-region inference profiles (us.)
+ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
+ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-5
+ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-5
+ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-fable-5-1
 ENV AWS_REGION=us-east-1
-ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096
+ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 ENV CLAUDE_CODE_ENTRYPOINT=cli
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
@@ -111,7 +111,7 @@ ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp
 ARG MCP_AWS_VERSION=1.6.3
 ARG AWS_REGION=us-east-1
 
-# Generate MCP configurations (Bedrock regional endpoints, AWS auth)
+# Generate MCP configurations (Bedrock cross-region inference profiles, AWS auth)
 RUN python3 - << 'PYEOF'
 import json, os
 
@@ -127,10 +127,10 @@ proxy_args = [
 ]
 proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
 
-model      = os.environ.get("ANTHROPIC_MODEL",           "anthropic.claude-haiku-4-5-20251001-v1:0")
-small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "anthropic.claude-sonnet-5-20250930-v1:0")
-large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "anthropic.claude-opus-5-20250617-v1:0")
-ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "anthropic.claude-fable-5-1-20250617-v1:0")
+model      = os.environ.get("ANTHROPIC_MODEL",           "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "us.anthropic.claude-sonnet-5")
+large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "us.anthropic.claude-opus-5")
+ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "us.anthropic.claude-fable-5-1")
 
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},
@@ -144,7 +144,7 @@ claude_cfg = {
         "smallFastModel": small_fast,
         "largeModel": large,
         "ultraFastModel": ultra_fast,
-        "maxOutputTokens": 4096,
+        "maxOutputTokens": 16384,
     },
 }
 agy_cfg = {

@@ -84,11 +84,11 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
 # Pricing: Anthropic API Global = Bedrock Global; Regional adds 10% surcharge
 ENV CLAUDE_ENVIRONMENT=development
 ENV ANTHROPIC_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_SMALL_FAST_MODEL=global.anthropic.claude-sonnet-4-5-20250929-v1:0
-ENV ANTHROPIC_LARGE_MODEL=global.anthropic.claude-opus-5-20250514-v1:0
-ENV ANTHROPIC_ULTRA_FAST_MODEL=global.anthropic.claude-fable-5-1-20250514-v1:0
+ENV ANTHROPIC_SMALL_FAST_MODEL=global.anthropic.claude-sonnet-5-20250930-v1:0
+ENV ANTHROPIC_LARGE_MODEL=global.anthropic.claude-opus-5-20250617-v1:0
+ENV ANTHROPIC_ULTRA_FAST_MODEL=global.anthropic.claude-fable-5-1-20250617-v1:0
 ENV ANTHROPIC_BEDROCK_HAIKU=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Haiku\ 4.5
-ENV ANTHROPIC_BEDROCK_SONNET=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Sonnet\ 4.5
+ENV ANTHROPIC_BEDROCK_SONNET=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Sonnet\ 5
 ENV ANTHROPIC_BEDROCK_OPUS=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Opus\ 5
 ENV ANTHROPIC_BEDROCK_FABLE=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Fable\ 5.1
 ENV ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION=us-east-1
@@ -148,7 +148,7 @@ if use_bedrock:
     ultra_fast = os.environ.get("ANTHROPIC_BEDROCK_FABLE", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Fable 5.1")
 else:
     model = os.environ.get("ANTHROPIC_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
-    small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "global.anthropic.claude-sonnet-5-20250930-v1:0")
     large = os.environ.get("ANTHROPIC_LARGE_MODEL", "global.anthropic.claude-opus-5-20250514-v1:0")
     ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL", "global.anthropic.claude-fable-5-1-20250514-v1:0")
 

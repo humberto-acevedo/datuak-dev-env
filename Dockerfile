@@ -77,21 +77,12 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
     cp -L /root/.local/bin/claude /usr/local/bin/claude && \
     chmod a+rx /usr/local/bin/claude
 
-# Claude model configuration - hybrid-ready (Global by default, Bedrock on demand)
-# Set CLAUDE_ENVIRONMENT=production to use Bedrock endpoints for VPC isolation
-# Default: Global endpoints (cost-efficient, lower latency, access to all models including Fable)
-# Production: Bedrock endpoints (VPC isolated, compliance-ready, 10% cost premium, no Fable 5.1)
-# Pricing: Anthropic API Global = Bedrock Global; Regional adds 10% surcharge
-ENV CLAUDE_ENVIRONMENT=development
-ENV ANTHROPIC_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_SMALL_FAST_MODEL=global.anthropic.claude-sonnet-5-20250930-v1:0
-ENV ANTHROPIC_LARGE_MODEL=global.anthropic.claude-opus-5-20250617-v1:0
-ENV ANTHROPIC_ULTRA_FAST_MODEL=global.anthropic.claude-fable-5-1-20250617-v1:0
-ENV ANTHROPIC_BEDROCK_HAIKU=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Haiku\ 4.5
-ENV ANTHROPIC_BEDROCK_SONNET=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Sonnet\ 5
-ENV ANTHROPIC_BEDROCK_OPUS=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Opus\ 5
-ENV ANTHROPIC_BEDROCK_FABLE=arn:aws:bedrock:us-east-1::inference-profile/US\ Anthropic\ Claude\ Fable\ 5.1
-ENV ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION=us-east-1
+# Claude model configuration - AWS Bedrock regional endpoints (single-region, VPC-isolatable)
+ENV ANTHROPIC_MODEL=anthropic.claude-haiku-4-5-20251001-v1:0
+ENV ANTHROPIC_SMALL_FAST_MODEL=anthropic.claude-sonnet-5-20250930-v1:0
+ENV ANTHROPIC_LARGE_MODEL=anthropic.claude-opus-5-20250617-v1:0
+ENV ANTHROPIC_ULTRA_FAST_MODEL=anthropic.claude-fable-5-1-20250617-v1:0
+ENV AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096
 ENV CLAUDE_CODE_ENTRYPOINT=cli
 ENV TERM=xterm-256color
@@ -120,7 +111,7 @@ ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp
 ARG MCP_AWS_VERSION=1.6.3
 ARG AWS_REGION=us-east-1
 
-# Generate both MCP configurations from shared ARG values (single source of truth)
+# Generate MCP configurations (Bedrock regional endpoints, AWS auth)
 RUN python3 - << 'PYEOF'
 import json, os
 
@@ -136,28 +127,23 @@ proxy_args = [
 ]
 proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
 
-# Determine which endpoint tier to use based on CLAUDE_ENVIRONMENT
-env_mode = os.environ.get("CLAUDE_ENVIRONMENT", "development").lower()
-use_bedrock = env_mode == "production"
-
-# Select model endpoints based on environment
-if use_bedrock:
-    model = os.environ.get("ANTHROPIC_BEDROCK_HAIKU", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Haiku 4.5")
-    small_fast = os.environ.get("ANTHROPIC_BEDROCK_SONNET", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Sonnet 4.5")
-    large = os.environ.get("ANTHROPIC_BEDROCK_OPUS", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Opus 5")
-    ultra_fast = os.environ.get("ANTHROPIC_BEDROCK_FABLE", "arn:aws:bedrock:us-east-1::inference-profile/US Anthropic Claude Fable 5.1")
-else:
-    model = os.environ.get("ANTHROPIC_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
-    small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "global.anthropic.claude-sonnet-5-20250930-v1:0")
-    large = os.environ.get("ANTHROPIC_LARGE_MODEL", "global.anthropic.claude-opus-5-20250514-v1:0")
-    ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL", "global.anthropic.claude-fable-5-1-20250514-v1:0")
+model      = os.environ.get("ANTHROPIC_MODEL",           "anthropic.claude-haiku-4-5-20251001-v1:0")
+small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "anthropic.claude-sonnet-5-20250930-v1:0")
+large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "anthropic.claude-opus-5-20250617-v1:0")
+ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "anthropic.claude-fable-5-1-20250617-v1:0")
 
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},
     "permissions": {"aws:*": "allow"},
+    "env": {
+        "CLAUDE_CODE_USE_BEDROCK": "1",
+        "AWS_REGION": region,
+    },
     "modelSettings": {
         "model": model,
         "smallFastModel": small_fast,
+        "largeModel": large,
+        "ultraFastModel": ultra_fast,
         "maxOutputTokens": 4096,
     },
 }
@@ -174,7 +160,7 @@ with open("/home/devuser/.gemini/config/mcp_config.json", "w") as f:
     json.dump(agy_cfg, f, indent=2)
 
 os.system("chown -R devuser:devuser /home/devuser/.claude /home/devuser/.gemini")
-print("✅ MCP configurations generated")
+print("✅ Bedrock regional MCP configurations generated")
 PYEOF
 
 # Bake sync-time utility script into image at build time

@@ -10,7 +10,7 @@ echo "🤖 Claude Environment: $CLAUDE_ENV"
 if [[ "$CLAUDE_ENV" == "production" ]]; then
   echo "   → Using AWS Bedrock endpoints (VPC-isolated, 10% cost premium)"
 else
-  echo "   → Using Global endpoints (cost-efficient, all models including Fable)"
+  echo "   → Using Global endpoints (cost-efficient)"
 fi
 
 # Attempt initial clock sync on startup (script baked into image)

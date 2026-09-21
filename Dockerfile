@@ -78,10 +78,11 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
     chmod a+rx /usr/local/bin/claude
 
 # Claude model configuration - AWS Bedrock cross-region inference profiles (us.)
+# See docs/BEDROCK_MODEL_ACCESS.md for account-level access status
 ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-5
-ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-5
-ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-fable-5-1
+ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-4-6
+ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-4-6-v1
+ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
 ENV AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 ENV CLAUDE_CODE_ENTRYPOINT=cli
@@ -128,9 +129,9 @@ proxy_args = [
 proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
 
 model      = os.environ.get("ANTHROPIC_MODEL",           "us.anthropic.claude-haiku-4-5-20251001-v1:0")
-small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "us.anthropic.claude-sonnet-5")
-large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "us.anthropic.claude-opus-5")
-ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "us.anthropic.claude-fable-5-1")
+small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "us.anthropic.claude-sonnet-4-6")
+large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "us.anthropic.claude-opus-4-6-v1")
+ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},

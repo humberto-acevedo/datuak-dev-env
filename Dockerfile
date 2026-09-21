@@ -89,15 +89,15 @@ ENV CLAUDE_CODE_ENTRYPOINT=cli
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
-# Install Kiro CLI and expose globally
+# Install Kiro CLI and expose globally (preserving original binary names)
 RUN curl --proto '=https' --tlsv1.2 -sSf \
       'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
       -o /tmp/kirocli.zip && \
     unzip /tmp/kirocli.zip -d /tmp/kirocli && \
     /tmp/kirocli/kirocli/install.sh --force --no-confirm && \
     rm -rf /tmp/kirocli.zip /tmp/kirocli && \
-    cp /root/.local/bin/kiro-cli /usr/local/bin/kiro && \
-    chmod a+rx /usr/local/bin/kiro
+    cp /root/.local/bin/kiro-cli* /usr/local/bin/ && \
+    chmod a+rx /usr/local/bin/kiro-cli*
 
 # Create non-root user early so configs go directly into their home
 RUN useradd -m -s /bin/bash devuser && \

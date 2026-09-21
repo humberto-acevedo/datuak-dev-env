@@ -16,8 +16,12 @@ fi
 # Attempt initial clock sync on startup (script baked into image)
 /usr/local/bin/sync-time 2>/dev/null || true
 
+# Fix workspace ownership: devuser for main workspace, root for Ideas (restricted)
+chown -R devuser:devuser /workspace 2>/dev/null || true
+chown -R root:root /workspace/Ideas 2>/dev/null || true
+
 # If launching kiro, verify KIRO_API_KEY is set
-if [[ "${1:-}" == "kiro-cli" ]]; then
+if [[ "${1:-}" == kiro-cli* ]]; then
   if [[ -z "${KIRO_API_KEY:-}" ]]; then
     echo "Warning: KIRO_API_KEY is not set. Authenticate with 'kiro-cli login' (device flow) or set KIRO_API_KEY in .env (Pro+ subscribers)." >&2
   fi

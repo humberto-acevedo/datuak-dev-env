@@ -16,19 +16,62 @@ RUN dnf update -y && \
       tmux \
       python3 \
       python3-pip \
+      python3-dnf \
+      sudo \
       shadow-utils \
       util-linux-user && \
     dnf clean all
 
-# Install uv (Python package manager) for AWS MCP proxy
-RUN pip3 install --upgrade uv
+# Build arguments for flexible version management
+ARG PYTHON_VERSION=3.9
+ARG NODEJS_MAJOR=20
 
-# Install AWS toolkit skills CLI
-RUN pip3 install skills
+# Warn if a newer Python is available in the repo
+RUN python3 - << 'PYVERCHECK'
+import os, re, subprocess
+requested = os.environ.get("PYTHON_VERSION", "3.9")
+try:
+    out = subprocess.check_output(["dnf", "search", "python3", "--available"],
+                                  stderr=subprocess.DEVNULL, text=True)
+    minors = [int(m) for m in re.findall(r'^python3\.(\d+)', out, re.MULTILINE)]
+    req_minor = int(requested.split('.')[1])
+    if minors and max(minors) > req_minor:
+        print(f"WARNING: Python 3.{max(minors)} available, installing {requested} as specified")
+except Exception:
+    pass
+PYVERCHECK
 
-# Install Node.js 20
-RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
-    dnf install -y nodejs
+RUN if [ "$PYTHON_VERSION" != "3.9" ]; then \
+      dnf install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-pip && \
+      update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
+      update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip${PYTHON_VERSION} 1 && \
+      # dnf's shebang uses /usr/bin/python3; pin it to 3.9 so dnf keeps working
+      sed -i '1s|#!/usr/bin/python3|#!/usr/bin/python3.9|' /usr/bin/dnf /usr/bin/dnf-3; \
+    fi
+
+RUN pip3 install --upgrade uv skills
+
+# Warn if a newer Node.js major version is available
+RUN python3 - << 'NODEVERCHECK'
+import json, os, subprocess
+requested = os.environ.get("NODEJS_MAJOR", "20")
+if requested != "current":
+    try:
+        data = subprocess.check_output(["curl", "-s", "https://nodejs.org/dist/index.json"], text=True)
+        latest = int(json.loads(data)[0]["version"].lstrip("v").split(".")[0])
+        if latest > int(requested):
+            print(f"WARNING: Node.js {latest} available, installing {requested} as specified")
+    except Exception:
+        pass
+NODEVERCHECK
+
+# Install specified Node.js version
+RUN if [ "$NODEJS_MAJOR" = "current" ]; then \
+      dnf install -y nodejs; \
+    else \
+      curl -fsSL https://rpm.nodesource.com/setup_${NODEJS_MAJOR}.x | bash - && \
+      dnf install -y nodejs; \
+    fi
 
 # Install Rust (system-wide so devuser can use cargo)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --no-modify-path && \
@@ -103,7 +146,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
 RUN useradd -m -s /bin/bash devuser && \
     mkdir -p /workspace && \
     chown -R devuser:devuser /workspace && \
-    dnf install -y sudo && \
     echo "devuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/devuser && \
     chmod 440 /etc/sudoers.d/devuser
 
@@ -116,9 +158,9 @@ ARG AWS_REGION=us-east-1
 RUN python3 - << 'PYEOF'
 import json, os
 
-endpoint = os.environ.get("MCP_AWS_ENDPOINT", "https://aws-mcp.us-east-1.api.aws/mcp")
-version  = os.environ.get("MCP_AWS_VERSION",  "1.6.3")
-region   = os.environ.get("AWS_REGION",        "us-east-1")
+endpoint = os.environ["MCP_AWS_ENDPOINT"]
+version  = os.environ["MCP_AWS_VERSION"]
+region   = os.environ["AWS_REGION"]
 
 proxy_args = [
     f"mcp-proxy-for-aws@{version}",
@@ -128,10 +170,10 @@ proxy_args = [
 ]
 proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
 
-model      = os.environ.get("ANTHROPIC_MODEL",           "us.anthropic.claude-haiku-4-5-20251001-v1:0")
-small_fast = os.environ.get("ANTHROPIC_SMALL_FAST_MODEL", "us.anthropic.claude-sonnet-4-6")
-large      = os.environ.get("ANTHROPIC_LARGE_MODEL",      "us.anthropic.claude-opus-4-6-v1")
-ultra_fast = os.environ.get("ANTHROPIC_ULTRA_FAST_MODEL",  "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+model      = os.environ["ANTHROPIC_MODEL"]
+small_fast = os.environ["ANTHROPIC_SMALL_FAST_MODEL"]
+large      = os.environ["ANTHROPIC_LARGE_MODEL"]
+ultra_fast = os.environ["ANTHROPIC_ULTRA_FAST_MODEL"]
 
 claude_cfg = {
     "mcpServers": {"aws-mcp": proxy_base},
@@ -184,9 +226,7 @@ SCRIPT
 RUN chmod +x /usr/local/bin/sync-time && \
     ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock
 
-# Copy entrypoint script and set as executable
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Switch to non-root user for runtime
 ENV HOME=/home/devuser

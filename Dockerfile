@@ -46,7 +46,9 @@ RUN if [ "$PYTHON_VERSION" != "3.9" ]; then \
       update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
       update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip${PYTHON_VERSION} 1 && \
       # dnf's shebang uses /usr/bin/python3; pin it to 3.9 so dnf keeps working
-      sed -i '1s|#!/usr/bin/python3|#!/usr/bin/python3.9|' /usr/bin/dnf /usr/bin/dnf-3; \
+      sed -i '1s|#!/usr/bin/python3|#!/usr/bin/python3.9|' /usr/bin/dnf /usr/bin/dnf-3 /usr/bin/aws /usr/bin/aws_completer; \
+      # Reinstall awscli for the pinned Python 3.9 to ensure dependencies are available
+      /usr/bin/pip3.9 install --upgrade awscli; \
     fi
 
 RUN pip3 install --upgrade uv skills

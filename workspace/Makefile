@@ -3,6 +3,9 @@ export
 
 IMAGE_NAME=datuak-workspace
 AWS_PROFILE ?= default
+ACCOUNT_ID=$(shell aws sts get-caller-identity --query Account --output text)
+REGION ?= us-east-1
+ECR_URI=$(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME)
 IDEAS_DIR=$(HOME)/Documents/Ideas
 TOOLS_CODE_DIR=$(HOME)/Development/tools-code
 LATEST_PYTHON ?= 3.12
@@ -67,6 +70,16 @@ kiro: ensure-sso
 shell: ensure-sso
 	@$(call _run-with-creds,/bin/bash)
 
+push: ensure-sso
+	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
+	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
+	docker push $(ECR_URI):latest
+
+pull: ensure-sso
+	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
+	docker pull $(ECR_URI):latest
+	docker tag $(ECR_URI):latest $(IMAGE_NAME):latest
+
 save:
 	docker save $(IMAGE_NAME) | gzip > $(IMAGE_NAME).tar.gz
 
@@ -112,4 +125,4 @@ test:
 	  echo "=== All tests passed ==="'
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell save load ps list-containers clean verify-aws-toolkit inspect-config test
+.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify-aws-toolkit inspect-config test

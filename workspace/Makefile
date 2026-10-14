@@ -20,7 +20,7 @@ AWS_ENV := \
 	-e KIRO_API_KEY
 
 DOCKER_VOLUMES := \
-	-v "$$PWD/../../..":/workspace \
+	-v "$$PWD/../..":/workspace \
 	-v "$(IDEAS_DIR)":/workspace/Ideas \
 	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code \
 	-v "$(HOME)/.ssh:/home/devuser/.ssh:ro" \

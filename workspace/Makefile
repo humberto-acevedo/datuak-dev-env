@@ -109,20 +109,26 @@ verify-aws-toolkit:
 	@echo ""
 	@$(MAKE) inspect-config
 
-test:
+test-config: ensure-sso
 	@echo "=== Building test image ===" && \
 	docker build -t $(IMAGE_NAME)-test . || { echo "Build failed"; exit 1; } && echo "Build successful"
 	@docker run --rm $(IMAGE_NAME)-test bash -c ' \
 	  echo "=== Testing Claude configuration ===" && \
-	  test -f $$HOME/.claude/settings.json            && echo "  Claude settings.json exists"  || { echo "  Claude settings.json missing"; exit 1; } && \
-	  python3 -m json.tool $$HOME/.claude/settings.json >/dev/null && echo "  Claude config is valid JSON" || { echo "  Claude config invalid"; exit 1; } && \
+	  test -f $$HOME/.claude/settings.json            && echo "  ✓ Claude settings.json exists"  || { echo "  ✗ Claude settings.json missing"; exit 1; } && \
+	  python3 -m json.tool $$HOME/.claude/settings.json >/dev/null && echo "  ✓ Claude config is valid JSON" || { echo "  ✗ Claude config invalid"; exit 1; } && \
 	  echo "=== Testing Gemini/AGY configuration ===" && \
-	  test -f $$HOME/.gemini/config/mcp_config.json   && echo "  AGY mcp_config.json exists"   || { echo "  AGY mcp_config.json missing"; exit 1; } && \
-	  python3 -m json.tool $$HOME/.gemini/config/mcp_config.json >/dev/null && echo "  AGY config is valid JSON" || { echo "  AGY config invalid"; exit 1; } && \
+	  test -f $$HOME/.gemini/config/mcp_config.json   && echo "  ✓ AGY mcp_config.json exists"   || { echo "  ✗ AGY mcp_config.json missing"; exit 1; } && \
+	  python3 -m json.tool $$HOME/.gemini/config/mcp_config.json >/dev/null && echo "  ✓ AGY config is valid JSON" || { echo "  ✗ AGY config invalid"; exit 1; } && \
 	  echo "=== Verifying AWS MCP server ===" && \
-	  grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json            && echo "  AWS MCP in Claude" || { echo "  AWS MCP missing in Claude"; exit 1; } && \
-	  grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json   && echo "  AWS MCP in AGY"    || { echo "  AWS MCP missing in AGY"; exit 1; } && \
+	  grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json            && echo "  ✓ AWS MCP in Claude" || { echo "  ✗ AWS MCP missing in Claude"; exit 1; } && \
+	  grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json   && echo "  ✓ AWS MCP in AGY"    || { echo "  ✗ AWS MCP missing in AGY"; exit 1; } && \
+	  echo "=== Verifying Claude Model Configuration ===" && \
+	  grep -q "us.anthropic.claude-haiku-5-5" $$HOME/.claude/settings.json && echo "  ✓ Haiku 5.5 set as default model" || { echo "  ✗ Haiku 5.5 not configured"; exit 1; } && \
+	  grep -q "us.anthropic.claude-sonnet-5-5" $$HOME/.claude/settings.json && echo "  ✓ Sonnet 5.5 configured" || { echo "  ✗ Sonnet 5.5 not configured"; exit 1; } && \
+	  grep -q "us.anthropic.claude-opus-5-5" $$HOME/.claude/settings.json && echo "  ✓ Opus 5.5 configured" || { echo "  ✗ Opus 5.5 not configured"; exit 1; } && \
 	  echo "=== All tests passed ==="'
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify-aws-toolkit inspect-config test
+test: test-config
+
+.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify-aws-toolkit inspect-config test test-config

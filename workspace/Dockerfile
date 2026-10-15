@@ -86,6 +86,16 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --
 # Install AWS CDK
 RUN npm install -g aws-cdk
 
+# Install React, Amplify, and Terraform
+RUN npm install -g create-react-app react react-dom && \
+    npm install -g @aws-amplify/cli && \
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor > /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list && \
+    apt-get update && apt-get install -y terraform || \
+    curl -fsSL https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip -o /tmp/terraform.zip && \
+    unzip /tmp/terraform.zip -d /usr/local/bin && rm /tmp/terraform.zip && \
+    chmod +x /usr/local/bin/terraform
+
 # Install gcloud CLI
 RUN tee /etc/yum.repos.d/google-cloud-cli.repo << EOM
 [google-cloud-cli]
@@ -123,11 +133,13 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/c
     chmod a+rx /usr/local/bin/claude
 
 # Claude model configuration - AWS Bedrock cross-region inference profiles (us.)
+# Latest Claude 5 family models: Haiku 5.5 (default), Sonnet 5.5, Opus 5.5
+# Verified available in AWS Bedrock US region
 # See docs/BEDROCK_MODEL_ACCESS.md for account-level access status
-ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
-ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-4-6
-ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-4-6-v1
-ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
+ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-5-5
+ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-5-5
+ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-5-5
+ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-haiku-5-5
 ENV AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 ENV CLAUDE_CODE_ENTRYPOINT=cli

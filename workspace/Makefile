@@ -27,7 +27,7 @@ DOCKER_VOLUMES := \
 	-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro"
 
 DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
-DOCKER_RUN_RM := docker run --rm $(IMAGE_NAME)
+DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=
 

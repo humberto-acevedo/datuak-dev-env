@@ -1,5 +1,6 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
+# Removed '-u' from set flags to avoid unset variable errors when optional vars are missing
 
 # Tools (claude, agy, kiro) are installed globally to /usr/local/bin at build time
 # so no extra PATH manipulation is needed here.
@@ -14,11 +15,20 @@ else
 fi
 
 # Attempt initial clock sync on startup (script baked into image)
-/usr/local/bin/sync-time 2>/dev/null || true
+# Use --max-time 8 to allow DNS resolution time; continue on timeout
+/usr/local/bin/sync-time || true
 
 # Fix workspace ownership: devuser for main workspace, root for Ideas (restricted)
-chown -R devuser:devuser /workspace 2>/dev/null || true
-chown -R root:root /workspace/Ideas 2>/dev/null || true
+# Use timeout to avoid hanging on large bind-mounted filesystems
+if /usr/bin/timeout 5 chown -R devuser:devuser /workspace 2>/dev/null; then
+  true
+else
+  # Large filesystem or mount issues; skip and continue
+  true
+fi
+if [[ -d /workspace/Ideas ]]; then
+  /usr/bin/timeout 3 chown -R root:root /workspace/Ideas 2>/dev/null || true
+fi
 
 # If launching kiro, verify KIRO_API_KEY is set
 if [[ "${1:-}" == kiro-cli* ]]; then
@@ -71,16 +81,6 @@ fi
 if [[ -d "${HOME}/.ssh" ]]; then
   chmod 700 "${HOME}/.ssh" 2>/dev/null || true
   find "${HOME}/.ssh" -type f -exec chmod 600 {} \; 2>/dev/null || true
-
-  # Trust GitHub's host key to avoid interactive prompts (with timeout)
-  if [[ ! -f "${HOME}/.ssh/known_hosts" ]] || ! grep -q github.com "${HOME}/.ssh/known_hosts" 2>/dev/null; then
-    if timeout 5 ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null; then
-      echo "✅ GitHub host key added to known_hosts"
-    else
-      echo "⚠️  Warning: Could not add GitHub host key (network timeout or GitHub unreachable)" >&2
-      echo "   Git operations may prompt for host verification" >&2
-    fi
-  fi
 
   # Tell gh CLI to use SSH for git operations
   git config --global url."git@github.com:".insteadOf "https://github.com/"

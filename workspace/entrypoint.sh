@@ -39,25 +39,32 @@ if [[ ! -s "${HOME}/.gemini/config/mcp_config.json" ]]; then
   echo "⚠️  Warning: AGY MCP configuration not found. This should have been generated at build time."
 fi
 
-
-# If launching agy, fetch the API key from Secrets Manager
+# If launching agy, fetch the API key from Secrets Manager (with timeout to prevent hang)
 if [[ "${1:-}" == "agy" ]]; then
   SECRET_NAME="${GEMINI_SECRET_NAME:-GoogleGeminiAPIKeyiMac}"
   MCP_ENDPOINT="${MCP_AWS_ENDPOINT:-https://aws-mcp.us-east-1.api.aws/mcp}"
   REGION="${AWS_REGION:-us-east-1}"
 
   echo "Fetching Antigravity/Gemini API key from Secrets Manager (secret: $SECRET_NAME, region: $REGION)..."
-  GEMINI_API_KEY=$(aws secretsmanager get-secret-value \
+
+  # Add timeout to prevent indefinite hang on credential/network issues
+  GEMINI_API_KEY=$(timeout 5 aws secretsmanager get-secret-value \
     --secret-id "$SECRET_NAME" \
     --region "$REGION" \
     --query SecretString \
-    --output text)
+    --output text 2>/dev/null || echo "")
+
   if [[ -z "$GEMINI_API_KEY" ]]; then
-    echo "Error: Could not retrieve secret '$SECRET_NAME'." >&2
+    echo "❌ Error: Could not retrieve secret '$SECRET_NAME'." >&2
+    echo "   This could be due to:" >&2
+    echo "   • AWS credentials expired or missing" >&2
+    echo "   • Network timeout (5 second limit)" >&2
+    echo "   • Secret not found in Secrets Manager" >&2
+    echo "   • Insufficient IAM permissions" >&2
     exit 1
   fi
   export GEMINI_API_KEY MCP_ENDPOINT
-  echo "GEMINI_API_KEY set."
+  echo "✅ GEMINI_API_KEY set."
 fi
 
 # Ensure correct permissions on mounted SSH keys (read-only mount may have wrong perms inside container)
@@ -65,9 +72,14 @@ if [[ -d "${HOME}/.ssh" ]]; then
   chmod 700 "${HOME}/.ssh" 2>/dev/null || true
   find "${HOME}/.ssh" -type f -exec chmod 600 {} \; 2>/dev/null || true
 
-  # Trust GitHub's host key to avoid interactive prompts
+  # Trust GitHub's host key to avoid interactive prompts (with timeout)
   if [[ ! -f "${HOME}/.ssh/known_hosts" ]] || ! grep -q github.com "${HOME}/.ssh/known_hosts" 2>/dev/null; then
-    ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
+    if timeout 5 ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null; then
+      echo "✅ GitHub host key added to known_hosts"
+    else
+      echo "⚠️  Warning: Could not add GitHub host key (network timeout or GitHub unreachable)" >&2
+      echo "   Git operations may prompt for host verification" >&2
+    fi
   fi
 
   # Tell gh CLI to use SSH for git operations

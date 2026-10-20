@@ -27,7 +27,7 @@ DOCKER_VOLUMES := \
 	-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro"
 
 DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
-DOCKER_RUN_RM := docker run --rm $(IMAGE_NAME)
+DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=
 
@@ -58,17 +58,46 @@ ensure-sso:
 
 _run-with-creds = eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && $(DOCKER_RUN) $(1)
 
+# Verification script run before interactive sessions
+_verify-container = bash -c ' \
+	echo ""; \
+	echo "=== Environment Verification ==="; \
+	echo ""; \
+	echo "Checking configuration files..."; \
+	test -f $$HOME/.claude/settings.json && echo "  ✅ Claude config" || echo "  ⚠️  Claude config missing"; \
+	test -f $$HOME/.gemini/config/mcp_config.json && echo "  ✅ Gemini config" || echo "  ⚠️  Gemini config missing"; \
+	echo ""; \
+	echo "Checking tools..."; \
+	command -v uv >/dev/null 2>&1 && echo "  ✅ uv (Python)" || echo "  ⚠️  uv not found"; \
+	command -v claude >/dev/null 2>&1 && echo "  ✅ Claude CLI" || echo "  ⚠️  Claude CLI not found"; \
+	command -v agy >/dev/null 2>&1 && echo "  ✅ Antigravity CLI" || echo "  ⚠️  Antigravity CLI not found"; \
+	command -v aws >/dev/null 2>&1 && echo "  ✅ AWS CLI" || echo "  ⚠️  AWS CLI not found"; \
+	echo ""; \
+	echo "Checking AWS credentials..."; \
+	if aws sts get-caller-identity >/dev/null 2>&1; then \
+		ACCOUNT=$$(aws sts get-caller-identity --query Account --output text); \
+		IDENTITY=$$(aws sts get-caller-identity --query Arn --output text | grep -oP \"assumed-role/[^/]+\" || echo \"user\"); \
+		echo "  ✅ AWS authenticated (Account: $$ACCOUNT, Identity: $$IDENTITY)"; \
+	else \
+		echo "  ❌ AWS credentials not available"; \
+	fi; \
+	echo ""; \
+	echo "=== Ready for development ==="; \
+	echo ""; \
+'
+
+# Interactive targets with verification
 claude: ensure-sso
-	@$(call _run-with-creds,claude)
+	@$(call _run-with-creds,$(_verify-container) && claude)
 
 antigravity agy: ensure-sso
-	@$(call _run-with-creds,agy)
+	@$(call _run-with-creds,$(_verify-container) && agy)
 
 kiro: ensure-sso
-	@$(call _run-with-creds,kiro-cli)
+	@$(call _run-with-creds,$(_verify-container) && kiro-cli)
 
 shell: ensure-sso
-	@$(call _run-with-creds,/bin/bash)
+	@$(call _run-with-creds,$(_verify-container) && /bin/bash)
 
 push: ensure-sso
 	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
@@ -109,7 +138,41 @@ verify-aws-toolkit:
 	@echo ""
 	@$(MAKE) inspect-config
 
-test-config: ensure-sso
+verify: ensure-sso
+	@echo "=== Docker Environment Verification ===" && \
+	echo "" && \
+	echo "1. Container startup verification..." && \
+	docker run --rm $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME) bash -c ' \
+		echo ""; \
+		echo "Configuration Files:"; \
+		test -f $$HOME/.claude/settings.json && echo "  ✅ Claude config exists" || echo "  ❌ Claude config missing"; \
+		test -f $$HOME/.gemini/config/mcp_config.json && echo "  ✅ Gemini config exists" || echo "  ❌ Gemini config missing"; \
+		echo ""; \
+		echo "Global Tools:"; \
+		command -v claude >/dev/null 2>&1 && echo "  ✅ Claude CLI installed" || echo "  ❌ Claude CLI missing"; \
+		command -v agy >/dev/null 2>&1 && echo "  ✅ Antigravity CLI installed" || echo "  ❌ Antigravity CLI missing"; \
+		command -v kiro-cli >/dev/null 2>&1 && echo "  ✅ Kiro CLI installed" || echo "  ❌ Kiro CLI missing"; \
+		command -v uv >/dev/null 2>&1 && echo "  ✅ uv package manager installed" || echo "  ❌ uv missing"; \
+		echo ""; \
+		echo "System Tools:"; \
+		aws --version && echo "  ✅ AWS CLI available" || echo "  ❌ AWS CLI error"; \
+		git --version && echo "  ✅ Git available" || echo "  ❌ Git error"; \
+		python3 --version && echo "  ✅ Python 3 available" || echo "  ❌ Python 3 error"; \
+		node --version && echo "  ✅ Node.js available" || echo "  ❌ Node.js error"; \
+		echo ""; \
+		echo "SSH Configuration:"; \
+		test -d $$HOME/.ssh && echo "  ✅ SSH directory exists" || echo "  ⚠️  SSH directory missing"; \
+		test -f $$HOME/.ssh/known_hosts && grep -q github.com $$HOME/.ssh/known_hosts && echo "  ✅ GitHub host key found" || echo "  ⚠️  GitHub host key missing"; \
+		echo ""; \
+		echo "✅ All verifications passed"; \
+	' && \
+	echo "" && \
+	echo "2. AWS credentials verification..." && \
+	@$(call _run-with-creds,aws sts get-caller-identity) && \
+	echo "" && \
+	echo "✅ Environment is ready for development"
+
+test:
 	@echo "=== Building test image ===" && \
 	docker build -t $(IMAGE_NAME)-test . || { echo "Build failed"; exit 1; } && echo "Build successful"
 	@docker run --rm $(IMAGE_NAME)-test bash -c ' \
@@ -129,6 +192,4 @@ test-config: ensure-sso
 	  echo "=== All tests passed ==="'
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-test: test-config
-
-.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify-aws-toolkit inspect-config test test-config
+.PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test

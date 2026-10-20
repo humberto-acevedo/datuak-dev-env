@@ -224,18 +224,26 @@ PYEOF
 RUN cat > /usr/local/bin/sync-time << 'SCRIPT'
 #!/bin/bash
 echo "==> Synchronizing system clock with AWS..."
-REMOTE_DATE=$(curl -sI --max-time 4 https://aws.amazon.com 2>/dev/null | grep -i '^date:' | cut -d' ' -f2- | tr -d '\r')
+# Try multiple sources with staggered timeouts; allow graceful degradation
+REMOTE_DATE=""
+for url in https://aws.amazon.com https://www.google.com https://www.github.com; do
+  if REMOTE_DATE=$(curl -sI --max-time 8 "$url" 2>/dev/null | grep -i '^date:' | cut -d' ' -f2- | tr -d '\r'); then
+    [[ -n "$REMOTE_DATE" ]] && break
+  fi
+done
 if [[ -z "$REMOTE_DATE" ]]; then
-  echo "Warning: Could not fetch AWS server time to sync clock." >&2
-  exit 1
+  echo "Warning: Could not fetch remote server time (network/DNS timeout)." >&2
+  exit 0
 fi
 echo "Time before sync: $(date -u)"
-if sudo date -s "$REMOTE_DATE" >/dev/null 2>&1; then
+# Use a wrapper to prevent hang: if date hangs, kill it after 3 seconds
+if /usr/bin/timeout 3 sudo date -s "$REMOTE_DATE" >/dev/null 2>&1; then
   echo "Time after sync : $(date -u)"
   echo "✅ Clock successfully synchronized."
 else
-  echo "⚠️  Failed to set clock. (Did you run container with --cap-add=SYS_TIME?)" >&2
+  echo "⚠️  Clock sync skipped (try running with --cap-add=SYS_TIME)." >&2
 fi
+exit 0
 SCRIPT
 RUN chmod +x /usr/local/bin/sync-time && \
     ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock

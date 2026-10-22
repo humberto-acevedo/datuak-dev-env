@@ -7,7 +7,7 @@ export BUILDKIT_PROGRESS=plain
 
 IMAGE_NAME=datuak-workspace
 AWS_PROFILE ?= default
-ACCOUNT_ID=$(shell aws sts get-caller-identity --query Account --output text)
+ACCOUNT_ID=$(shell aws sts get-caller-identity --profile $(AWS_PROFILE) --query Account --output text 2>/dev/null)
 REGION ?= us-east-1
 ECR_URI=$(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME)
 IDEAS_DIR=$(HOME)/Documents/Ideas
@@ -87,11 +87,11 @@ shell: ensure-sso
 
 push: ensure-sso
 	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
-	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
+	aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
 	docker push $(ECR_URI):latest
 
 pull: ensure-sso
-	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
+	aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
 	docker pull $(ECR_URI):latest
 	docker tag $(ECR_URI):latest $(IMAGE_NAME):latest
 

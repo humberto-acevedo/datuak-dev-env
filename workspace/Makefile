@@ -86,15 +86,15 @@ _verify-container = bash -c ' \
 	echo ""; \
 '
 
-# Interactive targets with verification
+# Interactive targets
 claude: ensure-sso
-	@$(call _run-with-creds,$(_verify-container) && claude)
+	@$(call _run-with-creds,claude)
 
 antigravity agy: ensure-sso
-	@$(call _run-with-creds,$(_verify-container) && agy)
+	@$(call _run-with-creds,agy)
 
 kiro: ensure-sso
-	@$(call _run-with-creds,$(_verify-container) && kiro-cli)
+	@$(call _run-with-creds,kiro-cli)
 
 shell: ensure-sso
 	@$(call _run-with-creds,$(_verify-container) && /bin/bash)
@@ -193,3 +193,6 @@ test:
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
 .PHONY: build rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test
+
+# Note: _verify-container variable is no longer used in interactive targets.
+# Run 'make verify' separately to see environment diagnostics before launching tools.

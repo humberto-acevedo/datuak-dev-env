@@ -38,7 +38,11 @@ build:
 	docker build $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAME) .
 
 build-cached: ensure-sso
-	@echo "Pulling latest image from ECR for cache..."
+	@echo "Building with ECR inline cache (pulling only needed layers)..."
+	docker build --cache-from $(ECR_URI):latest $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAME) .
+
+build-cached-full: ensure-sso
+	@echo "Pulling full image from ECR for cache..."
 	@$(MAKE) pull || echo "No remote image yet, building from scratch"
 	docker build --cache-from $(IMAGE_NAME):latest $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAME) .
 
@@ -170,4 +174,4 @@ test:
 	  echo "=== All tests passed ==="'
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test
+.PHONY: build build-cached build-cached-full rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test

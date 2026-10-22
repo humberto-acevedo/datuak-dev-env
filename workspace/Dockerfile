@@ -83,6 +83,13 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --
     ln -sf /usr/local/cargo/bin/rustc  /usr/local/bin/rustc  && \
     ln -sf /usr/local/cargo/bin/rustup /usr/local/bin/rustup
 
+# Create non-root user early so configs go directly into their home
+RUN useradd -m -s /bin/bash devuser && \
+    mkdir -p /workspace && \
+    chown -R devuser:devuser /workspace && \
+    echo "devuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/devuser && \
+    chmod 440 /etc/sudoers.d/devuser
+
 # Install AWS CDK
 RUN npm install -g aws-cdk
 
@@ -122,20 +129,6 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
 RUN git config --global credential.helper store && \
     git config --global core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
 
-# Install Antigravity CLI (agy) and expose globally
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh && \
-    cat /tmp/agy-install.sh | bash && \
-    rm /tmp/agy-install.sh && \
-    cp /root/.local/bin/agy /usr/local/bin/agy && \
-    chmod a+rx /usr/local/bin/agy
-
-# Install Claude Code CLI and expose globally
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \
-    sh /tmp/claude-install.sh && \
-    rm /tmp/claude-install.sh && \
-    cp -L /root/.local/bin/claude /usr/local/bin/claude && \
-    chmod a+rx /usr/local/bin/claude
-
 # Claude model configuration - AWS Bedrock cross-region inference profiles (us.)
 # Latest Claude 5 family models: Haiku 5.5 (default), Sonnet 5.5, Opus 5.5
 # Verified available in AWS Bedrock US region
@@ -150,6 +143,20 @@ ENV CLAUDE_CODE_ENTRYPOINT=cli
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
+# Install Antigravity CLI (agy) and expose globally
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh && \
+    cat /tmp/agy-install.sh | bash && \
+    rm /tmp/agy-install.sh && \
+    cp /root/.local/bin/agy /usr/local/bin/agy && \
+    chmod a+rx /usr/local/bin/agy
+
+# Install Claude Code CLI and expose globally
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \
+    sh /tmp/claude-install.sh && \
+    rm /tmp/claude-install.sh && \
+    cp -L /root/.local/bin/claude /usr/local/bin/claude && \
+    chmod a+rx /usr/local/bin/claude
+
 # Install Kiro CLI and expose globally (preserving original binary names)
 RUN curl --proto '=https' --tlsv1.2 -sSf \
       'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
@@ -159,13 +166,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
     rm -rf /tmp/kirocli.zip /tmp/kirocli && \
     cp /root/.local/bin/kiro-cli* /usr/local/bin/ && \
     chmod a+rx /usr/local/bin/kiro-cli*
-
-# Create non-root user early so configs go directly into their home
-RUN useradd -m -s /bin/bash devuser && \
-    mkdir -p /workspace && \
-    chown -R devuser:devuser /workspace && \
-    echo "devuser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/devuser && \
-    chmod 440 /etc/sudoers.d/devuser
 
 # MCP server configuration variables
 ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp

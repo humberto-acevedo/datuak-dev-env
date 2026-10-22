@@ -263,6 +263,23 @@ sync-time
 docker run --cap-add=SYS_TIME ...
 ```
 
+### `make push` / `make pull` fails with "no such file or directory"
+
+```
+failed to connect to the docker API at unix:///var/run/docker.sock
+```
+
+Docker Desktop uses a non-standard socket path. The Makefile detects the active Docker context automatically via `docker context inspect`, so this should be transparent. If it still fails:
+
+```bash
+# Check which context and socket path Docker is using
+docker context show
+docker context inspect $(docker context show) --format '{{.Endpoints.docker.Host}}'
+
+# Ensure Docker Desktop is running and the context is active
+docker info
+```
+
 ### Out of disk space
 ```bash
 # Clean Docker resources

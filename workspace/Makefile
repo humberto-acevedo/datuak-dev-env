@@ -85,14 +85,30 @@ kiro: ensure-sso
 shell: ensure-sso
 	@$(call _run-with-creds,/bin/bash)
 
+# Shared ECR login session used by push and pull.
+# Expands inline so TMPDIR, DOCKER_HOST_VAL, and the trap all share one shell invocation.
+#   trap:            guarantees temp dir cleanup even on failure — do not remove
+#   DOCKER_HOST_VAL: Docker Desktop uses a non-standard socket; reading the active context
+#                    avoids hardcoding /var/run/docker.sock which does not exist there
+#   isolated config: keeps the short-lived ECR token out of ~/.docker/config.json
+define ecr-session
+set -e; \
+TMPDIR=$$(mktemp -d); \
+trap "rm -rf $$TMPDIR" EXIT; \
+DOCKER_HOST_VAL=$$(docker context inspect $$(docker context show) --format '{{.Endpoints.docker.Host}}' 2>/dev/null); \
+echo '{"auths":{}}' > $$TMPDIR/config.json; \
+aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | \
+	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR login --username AWS --password-stdin $(ECR_URI)
+endef
+
 push: ensure-sso
 	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
-	aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
-	docker push $(ECR_URI):latest
+	@$(ecr-session); \
+	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR push $(ECR_URI):latest
 
 pull: ensure-sso
-	aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
-	docker pull $(ECR_URI):latest
+	@$(ecr-session); \
+	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR pull $(ECR_URI):latest; \
 	docker tag $(ECR_URI):latest $(IMAGE_NAME):latest
 
 save:

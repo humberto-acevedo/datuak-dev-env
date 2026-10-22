@@ -62,6 +62,48 @@ make agy
 - All requests tagged for compliance auditing
 - Python scripts run in isolated sandbox
 
+## Git Authentication
+
+The container supports two authentication methods:
+
+### Desktop (SSH Keys)
+```bash
+docker run -v ~/.ssh:/root/.ssh:ro datuak-dev-env
+```
+- **How it works:** Container detects mounted SSH key files (`id_*`) and configures SSH mode
+- **Git behavior:** Uses SSH — most secure, no token required
+- **Best for:** Local machines with persistent SSH key storage
+
+### Ephemeral Terminal (GitHub Token)
+```bash
+docker run -e GH_TOKEN=$(gh auth token) datuak-dev-env
+```
+- **How it works:** Token is passed into the container as an env var and written to `~/.git-credentials` at startup
+- **Git behavior:** HTTPS with token
+- **Accepted env vars:** `GH_TOKEN` or `GITHUB_TOKEN`
+- **Best for:** CI/CD, temporary terminals, cloud shells
+
+### How Authentication Works
+
+1. **Build time (Dockerfile):**
+   - `credential.helper store` configured so `~/.git-credentials` is read automatically
+   - SSH `StrictHostKeyChecking=accept-new` set to prevent interactive host-key prompts
+
+2. **Runtime (entrypoint.sh):**
+   - If `~/.ssh/id_*` key files exist → configure SSH mode
+   - Otherwise → resolve token from `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token` (fallback)
+   - If a token is found → write `~/.git-credentials` and git pull works transparently
+   - If neither → warn and exit; git will fail on private repos
+
+### Troubleshooting Git Auth
+
+| Issue | Solution |
+|-------|----------|
+| "Permission denied (publickey)" | Mount SSH keys: `docker run -v ~/.ssh:/root/.ssh:ro ...` |
+| "Authentication failed" / "could not read Password" | Pass token: `docker run -e GH_TOKEN=$(gh auth token) ...` |
+| "No SSH keys and no GH_TOKEN found" (startup warning) | See above — one of the two methods is required |
+| `gh auth token` returns nothing on host | Run `gh auth login` on the host first |
+
 ## Key Commands
 
 ### Development

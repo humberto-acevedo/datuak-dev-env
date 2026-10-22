@@ -118,6 +118,10 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     dnf install -y gh && \
     dnf clean all
 
+# Configure git credential store and SSH options
+RUN git config --system credential.helper store && \
+    git config --system core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
+
 # Install Antigravity CLI (agy) and expose globally
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh && \
     cat /tmp/agy-install.sh | bash && \

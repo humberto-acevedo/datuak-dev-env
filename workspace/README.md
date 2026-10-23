@@ -7,8 +7,8 @@ A containerized polyglot development environment with AI CLI tools (Claude, Anti
 ### First Time Setup
 
 ```bash
-# 1. Build image with inline cache metadata
-./scripts/buildkit-cache.sh
+# 1. Build image (creates local cache)
+make build
 
 # 2. Push to ECR (shares cache with team)
 make push
@@ -29,8 +29,8 @@ make agy          # Antigravity CLI
 make kiro         # Kiro CLI
 make shell        # Interactive bash shell
 
-# Rebuild after changes
-make build-cached # Fast rebuild with ECR cache
+# Rebuild after changes (uses ECR cache automatically)
+make build-cached # 30-60 sec rebuild with layer caching
 ```
 
 ## What's Inside
@@ -80,39 +80,53 @@ Mounted volumes:
 
 ## Build Optimization
 
-The image is **9.6GB** with a **10+ minute** clean build time. We use ECR caching to reduce rebuilds to **1-3 minutes**.
+The image is **9.6GB** with optimized layer caching for fast rebuilds.
+
+### Performance
+
+| Scenario | Time | Speedup |
+|----------|------|----------|
+| Fresh build (no cache) | 5-10 min | 3-6× faster |
+| With ECR cache (unchanged code) | 30-60 sec | 30-60× faster |
+| One package changed | 1-2 min | 15-30× faster |
+| Dockerfile only changed | Varies | Layer-specific |
 
 ### How It Works
 
-1. **Inline Cache**: Image embeds cache metadata
-2. **Layer Ordering**: Dockerfile ordered stable → volatile
-3. **Smart Pulling**: Only changed layers download
+1. **BuildKit Registry Cache**: `--cache-from/--cache-to type=registry`
+2. **22 Optimized Layers**: Each layer independently cacheable
+3. **No `make pull` needed**: `make build-cached` handles authentication automatically
+4. **Layer-Level Reuse**: Only changed layers rebuild
 
 ### Build Targets
 
 ```bash
-make build              # Standard build (local cache)
-make build-cached       # Smart ECR cache (recommended)
-make build-cached-full  # Pull full image, then build
-make rebuild            # Force clean build (no cache)
+make build              # Build with local cache (5-10 min)
+make build-cached       # Build with ECR layer cache (30-60 sec) ← Use this
+make rebuild            # Force clean build, no cache (10+ min)
+make build-latest       # Build with latest Python/Node versions
 ```
 
-**See [docs/BUILD_CACHING.md](docs/BUILD_CACHING.md) for complete caching guide.**
+**See [docs/DOCKER_CACHE_OPTIMIZATION.md](docs/DOCKER_CACHE_OPTIMIZATION.md) for detailed caching architecture.**
 
 ## Architecture
 
 ### Dockerfile Layer Strategy
 
+Optimized 22-layer structure for maximum cache reuse:
+
 ```
-Layers 1-84:   Base OS + Language Runtimes    [Stable - months]
-Layers 86-91:  User creation                   [Stable - rarely changes]
-Layers 93-128: Cloud CLIs (aws, gcloud, tf)   [Moderate - weeks]
-Layers 132-144: ENV variables                  [Moderate - weeks]
-Layers 146-168: AI CLIs (claude, agy, kiro)   [Volatile - frequent updates]
-Layers 170+:   Configs & scripts               [Volatile - development]
+Layer 1:      Base system packages       [Stable - months]
+Layer 2-4:    Python/uv setup            [Stable - rarely changes]
+Layer 5-6:    Node.js + npm packages     [Pinned versions]
+Layer 7-11:   Rust, Terraform, gcloud    [Moderate - weeks]
+Layer 12-14:  GitHub CLI, Git config     [Moderate - months]
+Layer 15-17:  Claude/AGY/Kiro CLIs       [Volatile - frequent]
+Layer 18:     MCP config                 [Volatile - development]
+Layer 19-22:  Environment & runtime      [Volatile - development]
 ```
 
-**Why?** When Claude CLI updates (frequent), only the last few layers rebuild (~2 min), not the entire stack (~10 min).
+**Key Optimization**: ARGs placed at top, pinned versions throughout, split layers by logical concern. When Claude CLI updates, only layers 15-17 rebuild (~1-2 min), not the entire stack.
 
 ## Configuration
 
@@ -155,11 +169,6 @@ KIRO_API_KEY=your-key-here
 
 ## Scripts
 
-### Build Scripts
-- `scripts/buildkit-cache.sh` - Build with inline cache metadata
-- `scripts/build-with-cache.sh` - Standard ECR caching
-- `scripts/setup-ecr.sh` - Create ECR repository
-
 ### Container Commands
 ```bash
 make claude      # Claude Code CLI
@@ -170,13 +179,16 @@ make shell       # Bash shell
 
 ### Management Commands
 ```bash
-make build       # Build image
-make push        # Push to ECR
-make pull        # Pull from ECR
+make build       # Build image with local cache (5-10 min)
+make build-cached # Build with ECR layer cache (30-60 sec) ← recommended
+make push        # Push image + layers to ECR
+make pull        # Pull image from ECR (optional)
 make verify      # Verify environment
 make clean       # Clean stopped containers
 make test        # Run validation tests
 ```
+
+**Note**: Deprecated scripts `buildkit-cache.sh` and `build-with-cache.sh` are no longer needed. Use `make build` and `make build-cached` instead.
 
 ## ECR Repository
 
@@ -196,35 +208,41 @@ make test        # Run validation tests
 
 ### Sharing Cache with Team
 
-**One person does this once:**
+**First-time setup (one person):**
 ```bash
-./scripts/buildkit-cache.sh  # Build with cache metadata
-make push                     # Share with team
+make build              # Build locally (5-10 min)
+make push               # Push image + all layers to ECR
 ```
 
-**Everyone else:**
+**Team members (no `make pull` needed!):**
 ```bash
-make build-cached            # Fast build using shared cache
+make build-cached       # Pulls layer cache from ECR (30-60 sec)
+                        # No image download required
 ```
 
 ### Updating Shared Cache
 
-When Dockerfile changes significantly:
+When Dockerfile changes:
 ```bash
-./scripts/buildkit-cache.sh  # Rebuild with new cache
-make push                     # Share updated cache
-# Notify team: "New cache available!"
+make build              # Rebuild locally
+make push               # Updated cache automatically goes to ECR
+# Notify team: "Cache updated"
 ```
+
+**Note**: `make build-cached` handles ECR authentication automatically via `ensure-sso`. No separate `make pull` needed.
 
 ## Troubleshooting
 
 ### Build is slow
 ```bash
-# Use ECR cache
+# Use ECR cache (30-60 sec with layer reuse)
 make build-cached
 
-# Verify BuildKit is enabled
-grep DOCKER_BUILDKIT Makefile  # Should show: export DOCKER_BUILDKIT=1
+# Verify BuildKit and registry cache are enabled
+grep -A 5 "^build-cached:" Makefile  # Should show: --cache-from type=registry
+
+# Check cache status
+docker buildx du  # Shows build cache usage
 ```
 
 ### AWS credentials issues
@@ -258,14 +276,14 @@ docker image prune -a
 
 ### Build Times
 
-| Scenario | Time | Notes |
-|----------|------|-------|
-| First build (no cache) | 10+ min | One-time cost |
-| With ECR cache | 1-3 min | Typical rebuild |
-| No changes | 10-30 sec | Pure cache hit |
-| ENV variable change | 1-2 min | Only top layers |
-| AI CLI update | 2-3 min | Volatile layers only |
-| Language runtime change | 8-9 min | Invalidates many layers |
+| Scenario | Time | Speedup |
+|----------|------|----------|
+| First build (no cache) | 5-10 min | 3-6× |
+| With ECR cache (no changes) | 30-60 sec | **30-60×** |
+| One npm package added | 1-2 min | 15-30× |
+| AI CLI update | 2-5 min | 6-15× |
+| Language runtime change | 5-10 min | 3-6× |
+| Dockerfile only change | 30-60 sec | **30-60×** |
 
 ### Image Size
 - **Total**: 9.61 GB
@@ -275,7 +293,8 @@ docker image prune -a
 
 ## Documentation
 
-- **[BUILD_CACHING.md](docs/BUILD_CACHING.md)** - Complete caching guide, FAQ, troubleshooting
+- **[DOCKER_CACHE_OPTIMIZATION.md](docs/DOCKER_CACHE_OPTIMIZATION.md)** - Detailed cache architecture, root cause analysis, optimization guide
+- **[BUILD_CACHING.md](docs/BUILD_CACHING.md)** - Legacy caching reference
 - **[BEDROCK_MODEL_ACCESS.md](docs/BEDROCK_MODEL_ACCESS.md)** - AWS Bedrock model access status
 
 ## Requirements

@@ -40,9 +40,10 @@ build:
 
 build-cached: ensure-sso
 	@echo "Building with ECR layer cache (BuildKit registry backend)..."
-	docker build \
+	docker buildx build \
 		--cache-from type=registry,ref=$(ECR_URI):latest \
 		--cache-to type=registry,ref=$(ECR_URI):latest,mode=max \
+		--load \
 		$(DOCKER_BUILD_ARGS) \
 		-t $(IMAGE_NAME) .
 
@@ -108,7 +109,8 @@ push: ensure-sso
 
 pull: ensure-sso
 	@$(ecr-session); \
-	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR pull $(ECR_URI):latest; \
+	PLATFORM=$$(uname -m | sed 's/x86_64/linux\/amd64/; s/aarch64/linux\/arm64/; s/arm64/linux\/arm64/'); \
+	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR pull --platform $$PLATFORM $(ECR_URI):latest; \
 	docker tag $(ECR_URI):latest $(IMAGE_NAME):latest
 
 save:

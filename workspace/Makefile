@@ -102,6 +102,11 @@ aws ecr get-login-password --profile $(AWS_PROFILE) --region $(REGION) | \
 	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR login --username AWS --password-stdin $(ECR_URI)
 endef
 
+# Detect platform architecture and map to Docker format
+define get-platform
+uname -m | sed 's/x86_64/linux\/amd64/; s/aarch64/linux\/arm64/; s/arm64/linux\/arm64/'
+endef
+
 push: ensure-sso
 	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
 	@$(ecr-session); \
@@ -109,8 +114,7 @@ push: ensure-sso
 
 pull: ensure-sso
 	@$(ecr-session); \
-	PLATFORM=$$(uname -m | sed 's/x86_64/linux\/amd64/; s/aarch64/linux\/arm64/; s/arm64/linux\/arm64/'); \
-	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR pull --platform $$PLATFORM $(ECR_URI):latest; \
+	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR pull --platform $(shell $(get-platform)) $(ECR_URI):latest; \
 	docker tag $(ECR_URI):latest $(IMAGE_NAME):latest
 
 save:

@@ -107,11 +107,17 @@ clean:
 	docker container prune -f
 
 inspect-config:
+	@echo "=== MCP Registry (canonical source) ==="
+	@$(DOCKER_RUN_RM) cat /home/devuser/.mcp/registry.json 2>/dev/null || echo "No registry.json found"
+	@echo ""
 	@echo "=== Claude MCP Configuration ==="
 	@$(DOCKER_RUN_RM) cat /home/devuser/.claude/settings.json 2>/dev/null || echo "No settings.json found"
 	@echo ""
 	@echo "=== Antigravity (AGY) MCP Configuration ==="
 	@$(DOCKER_RUN_RM) cat /home/devuser/.gemini/config/mcp_config.json 2>/dev/null || echo "No mcp_config.json found"
+	@echo ""
+	@echo "=== Kiro MCP Configuration ==="
+	@$(DOCKER_RUN_RM) cat /home/devuser/.kiro/settings/mcp.json 2>/dev/null || echo "No mcp.json found"
 
 verify-aws-toolkit:
 	@echo "=== AWS Agent Toolkit Verification ==="
@@ -167,6 +173,10 @@ test:
 	  echo "=== Verifying AWS MCP server ===" && \
 	  grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json            && echo "  ✓ AWS MCP in Claude" || { echo "  ✗ AWS MCP missing in Claude"; exit 1; } && \
 	  grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json   && echo "  ✓ AWS MCP in AGY"    || { echo "  ✗ AWS MCP missing in AGY"; exit 1; } && \
+	  grep -q mcp-proxy-for-aws $$HOME/.kiro/settings/mcp.json           && echo "  ✓ AWS MCP in Kiro"   || { echo "  ✗ AWS MCP missing in Kiro"; exit 1; } && \
+	  grep -q usafacts $$HOME/.claude/settings.json                       && echo "  ✓ USAFacts in Claude" || { echo "  ✗ USAFacts missing in Claude"; exit 1; } && \
+	  grep -q usafacts $$HOME/.kiro/settings/mcp.json                     && echo "  ✓ USAFacts in Kiro"  || { echo "  ✗ USAFacts missing in Kiro"; exit 1; } && \
+	  test -f $$HOME/.mcp/registry.json                                   && echo "  ✓ MCP registry exists" || { echo "  ✗ MCP registry missing"; exit 1; } && \
 	  echo "=== Verifying Claude Model Configuration ===" && \
 	  grep -q "us.anthropic.claude-haiku-5-5" $$HOME/.claude/settings.json && echo "  ✓ Haiku 5.5 set as default model" || { echo "  ✗ Haiku 5.5 not configured"; exit 1; } && \
 	  grep -q "us.anthropic.claude-sonnet-5-5" $$HOME/.claude/settings.json && echo "  ✓ Sonnet 5.5 configured" || { echo "  ✗ Sonnet 5.5 not configured"; exit 1; } && \

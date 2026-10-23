@@ -172,29 +172,73 @@ ARG MCP_AWS_ENDPOINT=https://aws-mcp.us-east-1.api.aws/mcp
 ARG MCP_AWS_VERSION=1.6.3
 ARG AWS_REGION=us-east-1
 
-# Generate MCP configurations (Bedrock cross-region inference profiles, AWS auth)
+# Generate MCP registry and per-harness configurations from single source of truth.
+# To add/change an MCP server: edit the registry dict below, then rebuild.
+# auto_load controls which tools receive the server by default.
+# overrides provides per-tool config fields merged over the base config.
 RUN python3 - << 'PYEOF'
 import json, os
 
-endpoint = os.environ["MCP_AWS_ENDPOINT"]
-version  = os.environ["MCP_AWS_VERSION"]
-region   = os.environ["AWS_REGION"]
-
-proxy_args = [
-    f"mcp-proxy-for-aws@{version}",
-    endpoint,
-    "--metadata",
-    f"AWS_REGION={region}",
-]
-proxy_base = {"command": "uvx", "timeout": 100000, "transport": "stdio", "args": proxy_args}
-
+endpoint   = os.environ["MCP_AWS_ENDPOINT"]
+version    = os.environ["MCP_AWS_VERSION"]
+region     = os.environ["AWS_REGION"]
 model      = os.environ["ANTHROPIC_MODEL"]
 small_fast = os.environ["ANTHROPIC_SMALL_FAST_MODEL"]
 large      = os.environ["ANTHROPIC_LARGE_MODEL"]
 ultra_fast = os.environ["ANTHROPIC_ULTRA_FAST_MODEL"]
 
+# === Canonical MCP Registry ===
+registry = {
+    "version": "1",
+    "servers": {
+        "aws-mcp": {
+            "description": "AWS services via AWS MCP proxy",
+            "auto_load": ["claude", "agy", "kiro"],
+            "config": {
+                "command": "uvx",
+                "timeout": 100000,
+                "transport": "stdio",
+                "args": [
+                    f"mcp-proxy-for-aws@{version}",
+                    endpoint,
+                    "--metadata",
+                    f"AWS_REGION={region}",
+                ],
+            },
+            "overrides": {
+                "agy":  {"env": {"AWS_REGION": region}},
+                "kiro": {"env": {"AWS_REGION": region}},
+            },
+        },
+        "usafacts": {
+            "description": "USAFacts public data and statistics",
+            "auto_load": ["claude", "kiro"],
+            "config": {
+                "transport": "http",
+                "url": "https://usafacts.org/mcp/",
+            },
+        },
+    },
+}
+
+def build_server_config(srv, tool):
+    cfg = dict(srv["config"])
+    cfg.update(srv.get("overrides", {}).get(tool, {}))
+    return cfg
+
+def build_mcp_servers(registry, tool):
+    return {
+        name: build_server_config(srv, tool)
+        for name, srv in registry["servers"].items()
+        if tool in srv.get("auto_load", [])
+    }
+
+claude_servers = build_mcp_servers(registry, "claude")
+agy_servers    = build_mcp_servers(registry, "agy")
+kiro_servers   = build_mcp_servers(registry, "kiro")
+
 claude_cfg = {
-    "mcpServers": {"aws-mcp": proxy_base},
+    "mcpServers": claude_servers,
     "permissions": {"aws:*": "allow"},
     "env": {
         "CLAUDE_CODE_USE_BEDROCK": "1",
@@ -209,19 +253,31 @@ claude_cfg = {
     },
 }
 agy_cfg = {
-    "mcpServers": {"aws-mcp": {**proxy_base, "env": {"AWS_REGION": region}}},
+    "mcpServers": agy_servers,
+}
+kiro_cfg = {
+    "mcpServers": kiro_servers,
 }
 
-os.makedirs("/home/devuser/.claude",        exist_ok=True)
-os.makedirs("/home/devuser/.gemini/config", exist_ok=True)
+os.makedirs("/home/devuser/.mcp",                  exist_ok=True)
+os.makedirs("/home/devuser/.claude",               exist_ok=True)
+os.makedirs("/home/devuser/.gemini/config",        exist_ok=True)
+os.makedirs("/home/devuser/.kiro/settings",        exist_ok=True)
 
-with open("/home/devuser/.claude/settings.json",        "w") as f:
+with open("/home/devuser/.mcp/registry.json",             "w") as f:
+    json.dump(registry, f, indent=2)
+with open("/home/devuser/.claude/settings.json",          "w") as f:
     json.dump(claude_cfg, f, indent=2)
 with open("/home/devuser/.gemini/config/mcp_config.json", "w") as f:
     json.dump(agy_cfg, f, indent=2)
+with open("/home/devuser/.kiro/settings/mcp.json",        "w") as f:
+    json.dump(kiro_cfg, f, indent=2)
 
-os.system("chown -R devuser:devuser /home/devuser/.claude /home/devuser/.gemini")
-print("✅ Bedrock regional MCP configurations generated")
+os.system("chown -R devuser:devuser /home/devuser/.mcp /home/devuser/.claude /home/devuser/.gemini /home/devuser/.kiro")
+print(f"✅ MCP registry written  ({len(registry['servers'])} servers)")
+print(f"   Claude: {list(claude_servers.keys())}")
+print(f"   AGY:    {list(agy_servers.keys())}")
+print(f"   Kiro:   {list(kiro_servers.keys())}")
 PYEOF
 
 # Bake sync-time utility script into image at build time

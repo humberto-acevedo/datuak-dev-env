@@ -108,6 +108,8 @@ uname -m | sed 's/x86_64/linux\/amd64/; s/aarch64/linux\/arm64/; s/arm64/linux\/
 endef
 
 push: ensure-sso
+	@echo "Rebuilding image without BuildKit cache metadata before push..."
+	docker build -t $(IMAGE_NAME):latest . >/dev/null 2>&1
 	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
 	@$(ecr-session); \
 	DOCKER_HOST=$$DOCKER_HOST_VAL docker --config $$TMPDIR push $(ECR_URI):latest

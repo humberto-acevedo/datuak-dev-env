@@ -21,7 +21,9 @@ AWS_ENV := \
 	-e AWS_SESSION_TOKEN \
 	-e AWS_REGION \
 	-e AWS_ACCOUNT \
-	-e KIRO_API_KEY
+	-e KIRO_API_KEY \
+	-e GH_TOKEN \
+	-e GITHUB_TOKEN
 
 _vol_ideas    := $(if $(wildcard $(IDEAS_DIR)),-v "$(IDEAS_DIR)":/workspace/Ideas)
 _vol_tools    := $(if $(wildcard $(TOOLS_CODE_DIR)),-v "$(TOOLS_CODE_DIR)":/workspace/tools-code)

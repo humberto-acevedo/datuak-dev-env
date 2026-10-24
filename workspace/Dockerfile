@@ -101,7 +101,8 @@ RUN dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.rep
     dnf clean all
 
 # === Layer 11: Git configuration ===
-RUN git config --system credential.helper store && \
+RUN git config --system safe.directory '*' && \
+    git config --system credential.helper store && \
     git config --system core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
 
 # === Layer 12: Claude Code CLI ===

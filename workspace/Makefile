@@ -38,7 +38,11 @@ DOCKER_VOLUMES := \
 # Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)
 DOCKER_TTY := $(shell test -t 0 && echo -t || true)
 
-DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
+DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) \
+	-e GIT_CONFIG_COUNT=1 \
+	-e GIT_CONFIG_KEY_0=safe.directory \
+	-e "GIT_CONFIG_VALUE_0=*" \
+	$(IMAGE_NAME)
 DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=
@@ -95,6 +99,12 @@ kiro: ensure-sso
 
 shell: ensure-sso
 	@$(call _run-with-creds,/bin/bash)
+
+debug-shell: ensure-sso
+	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) \
+	  --entrypoint bash $(IMAGE_NAME) \
+	  -x /usr/local/bin/entrypoint.sh /bin/bash 2>&1
 
 # Shared ECR login session used by push and pull.
 # Expands inline so TMPDIR, DOCKER_HOST_VAL, and the trap all share one shell invocation.
@@ -219,4 +229,4 @@ test:
 	  echo "=== All tests passed ==="'
 	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test

@@ -87,7 +87,7 @@ if [[ -d "${HOME}/.ssh" ]] && ls "${HOME}/.ssh/id_"* &>/dev/null 2>/dev/null; th
   echo "✅ Git configured to use mounted SSH keys"
 else
   # No SSH keys: resolve token from env var (GH_TOKEN/GITHUB_TOKEN) or gh CLI
-  RESOLVED_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-$(gh auth token 2>/dev/null)}}"
+  RESOLVED_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}}"
   if [[ -n "$RESOLVED_TOKEN" ]]; then
     echo "https://${GIT_USER_NAME:-humberto-acevedo}:${RESOLVED_TOKEN}@github.com" > "${HOME}/.git-credentials"
     chmod 600 "${HOME}/.git-credentials"

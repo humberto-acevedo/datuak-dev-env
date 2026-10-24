@@ -23,14 +23,33 @@ AWS_ENV := \
 	-e AWS_ACCOUNT \
 	-e KIRO_API_KEY
 
+_vol_ideas    := $(if $(wildcard $(IDEAS_DIR)),-v "$(IDEAS_DIR)":/workspace/Ideas)
+_vol_tools    := $(if $(wildcard $(TOOLS_CODE_DIR)),-v "$(TOOLS_CODE_DIR)":/workspace/tools-code)
+_vol_ssh      := $(if $(wildcard $(HOME)/.ssh),-v "$(HOME)/.ssh:/home/devuser/.ssh:ro")
+_vol_gh       := $(if $(wildcard $(HOME)/.config/gh),-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro")
+
+# SSH agent forwarding: macOS uses Docker Desktop's built-in proxy; Linux forwards the host socket
+ifeq ($(shell uname),Darwin)
+_env_ssh_agent := -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
+else
+_vol_ssh_agent := $(if $(SSH_AUTH_SOCK),-v "$(SSH_AUTH_SOCK):/ssh-agent")
+_env_ssh_agent := $(if $(SSH_AUTH_SOCK),-e SSH_AUTH_SOCK=/ssh-agent)
+endif
+
 DOCKER_VOLUMES := \
 	-v "$$PWD/../..":/workspace \
-	-v "$(IDEAS_DIR)":/workspace/Ideas \
-	-v "$(TOOLS_CODE_DIR)":/workspace/tools-code \
-	-v "$(HOME)/.ssh:/home/devuser/.ssh:ro" \
-	-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro"
+	$(_vol_ideas) \
+	$(_vol_tools) \
+	$(_vol_ssh) \
+	$(_vol_gh) \
+	$(_vol_ssh_agent)
 
-DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME)
+# Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)
+DOCKER_TTY := $(shell test -t 0 && echo -t || true)
+
+DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) \
+	$(_env_ssh_agent) \
+	$(IMAGE_NAME)
 DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=

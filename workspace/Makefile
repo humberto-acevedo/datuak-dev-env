@@ -39,6 +39,8 @@ build:
 	docker build $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAME) .
 
 build-cached: ensure-sso
+	@echo "Logging into ECR..."
+	@aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
 	@echo "Building with ECR layer cache (BuildKit registry backend)..."
 	docker buildx build \
 		--cache-from type=registry,ref=$(ECR_URI):latest \

@@ -15,6 +15,10 @@ TOOLS_CODE_DIR=$(HOME)/Development/tools-code
 LATEST_PYTHON ?= 3.12
 LATEST_NODE   ?= 22
 
+# Resolve GitHub token from host's gh CLI (reads macOS Keychain when needed).
+# Must be defined before AWS_ENV since := is an immediate assignment.
+_gh_token     := $(shell gh auth token 2>/dev/null)
+
 AWS_ENV := \
 	-e AWS_ACCESS_KEY_ID \
 	-e AWS_SECRET_ACCESS_KEY \
@@ -23,6 +27,7 @@ AWS_ENV := \
 	-e AWS_ACCOUNT \
 	-e KIRO_API_KEY \
 	-e GH_TOKEN \
+	$(if $(_gh_token),-e GH_TOKEN=$(_gh_token)) \
 	-e GITHUB_TOKEN
 
 _vol_ideas    := $(if $(wildcard $(IDEAS_DIR)),-v "$(IDEAS_DIR)":/workspace/Ideas)
@@ -43,7 +48,7 @@ DOCKER_VOLUMES := \
 	$(_vol_ideas) \
 	$(_vol_tools) \
 	$(_vol_ssh) \
-	$(_vol_gh)
+	$(_vol_gh) \
 	$(_vol_ssh_agent)
 
 # Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)

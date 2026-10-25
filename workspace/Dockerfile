@@ -102,8 +102,8 @@ RUN dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.rep
 
 # === Layer 11: Git configuration ===
 RUN git config --system safe.directory '*' && \
-    git config --global credential.helper store && \
-    git config --global core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
+    git config --system credential.helper store && \
+    git config --system core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
 
 # === Layer 12: Claude Code CLI ===
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh && \

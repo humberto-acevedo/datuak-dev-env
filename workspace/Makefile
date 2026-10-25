@@ -17,7 +17,10 @@ LATEST_NODE   ?= 22
 
 # Resolve GitHub token from host's gh CLI (reads macOS Keychain when needed).
 # Must be defined before AWS_ENV since := is an immediate assignment.
+# On a new host: run `gh auth login` once so the Keychain (macOS) or token file (Linux) is populated,
+# or export GH_TOKEN before running make.
 _gh_token     := $(shell gh auth token 2>/dev/null)
+$(if $(_gh_token),,$(warning GH_TOKEN could not be resolved — run `gh auth login` or export GH_TOKEN. GitHub operations inside the container will fail.))
 
 AWS_ENV := \
 	-e AWS_ACCESS_KEY_ID \
@@ -33,7 +36,6 @@ AWS_ENV := \
 _vol_ideas    := $(if $(wildcard $(IDEAS_DIR)),-v "$(IDEAS_DIR)":/workspace/Ideas)
 _vol_tools    := $(if $(wildcard $(TOOLS_CODE_DIR)),-v "$(TOOLS_CODE_DIR)":/workspace/tools-code)
 _vol_ssh      := $(if $(wildcard $(HOME)/.ssh),-v "$(HOME)/.ssh:/home/devuser/.ssh:ro")
-_vol_gh       := $(if $(wildcard $(HOME)/.config/gh),-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro")
 
 # SSH agent forwarding: macOS uses Docker Desktop's built-in proxy; Linux forwards the host socket
 ifeq ($(shell uname),Darwin)
@@ -48,7 +50,6 @@ DOCKER_VOLUMES := \
 	$(_vol_ideas) \
 	$(_vol_tools) \
 	$(_vol_ssh) \
-	$(_vol_gh) \
 	$(_vol_ssh_agent)
 
 # Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)
@@ -218,6 +219,19 @@ verify: ensure-sso
 		echo ""; \
 		echo "AWS Credentials:"; \
 		aws sts get-caller-identity; \
+		echo ""; \
+		echo "GitHub Authentication:"; \
+		if [ -n "$${GH_TOKEN}" ]; then \
+			echo "  ✅ GH_TOKEN is set"; \
+			if gh auth status 2>&1 | grep -q "Active account: true"; then \
+				echo "  ✅ gh CLI authenticated (active account confirmed)"; \
+				gh auth status 2>&1 | grep -E "(Logged in|Token scopes)" | sed "s/^/     /"; \
+			else \
+				echo "  ❌ GH_TOKEN set but gh auth status shows no active account"; \
+			fi; \
+		else \
+			echo "  ⚠️  GH_TOKEN not set — GitHub operations may fail"; \
+		fi; \
 	' && \
 	echo "" && \
 	echo "✅ Environment is ready for development"
@@ -239,6 +253,8 @@ test:
 	  grep -q usafacts $$HOME/.claude/settings.json                       && echo "  ✓ USAFacts in Claude" || { echo "  ✗ USAFacts missing in Claude"; exit 1; } && \
 	  grep -q usafacts $$HOME/.kiro/settings/mcp.json                     && echo "  ✓ USAFacts in Kiro"  || { echo "  ✗ USAFacts missing in Kiro"; exit 1; } && \
 	  test -f $$HOME/.mcp/registry.json                                   && echo "  ✓ MCP registry exists" || { echo "  ✗ MCP registry missing"; exit 1; } && \
+	  echo "=== Testing GitHub CLI ===" && \
+	  command -v gh >/dev/null 2>&1 && echo "  ✓ gh CLI installed" || { echo "  ✗ gh CLI missing"; exit 1; } && \
 	  echo "=== Verifying Claude Model Configuration ===" && \
 	  grep -q "us.anthropic.claude-haiku-5-5" $$HOME/.claude/settings.json && echo "  ✓ Haiku 5.5 set as default model" || { echo "  ✗ Haiku 5.5 not configured"; exit 1; } && \
 	  grep -q "us.anthropic.claude-sonnet-5-5" $$HOME/.claude/settings.json && echo "  ✓ Sonnet 5.5 configured" || { echo "  ✗ Sonnet 5.5 not configured"; exit 1; } && \

@@ -187,10 +187,10 @@ verify: ensure-sso
 		chk "Kiro mcp.json"              test -f $$HOME/.kiro/settings/mcp.json; \
 		chk "MCP registry"               test -f $$HOME/.mcp/registry.json; \
 		echo "MCP servers:"; \
-		chk "AWS MCP → Claude"           grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json; \
+		chk "AWS MCP → Claude"           grep -q mcp-proxy-for-aws $$HOME/.claude.json; \
 		chk "AWS MCP → AGY"              grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json; \
 		chk "AWS MCP → Kiro"             grep -q mcp-proxy-for-aws $$HOME/.kiro/settings/mcp.json; \
-		chk "USAFacts → Claude"          grep -q usafacts $$HOME/.claude/settings.json; \
+		chk "USAFacts → Claude"          grep -q usafacts $$HOME/.claude.json; \
 		chk "USAFacts → Kiro"            grep -q usafacts $$HOME/.kiro/settings/mcp.json; \
 		echo "Model config:"; \
 		chk "Haiku 5.5 default"          grep -q us.anthropic.claude-haiku-5-5 $$HOME/.claude/settings.json; \

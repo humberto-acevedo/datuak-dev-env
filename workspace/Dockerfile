@@ -167,7 +167,7 @@ registry = {
             "description": "USAFacts public data and statistics",
             "auto_load": ["claude", "kiro"],
             "config": {
-                "transport": "http",
+                "type": "http",
                 "url": "https://data.mcp.usafacts.org/mcp",
             },
         },

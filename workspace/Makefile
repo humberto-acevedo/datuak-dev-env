@@ -19,7 +19,7 @@ LATEST_NODE   ?= 22
 # Must be defined before DEV_ENV since := is an immediate assignment.
 # On a new host: run `gh auth login` once so the Keychain (macOS) or token file (Linux) is populated,
 # or export GH_TOKEN before running make.
-_gh_token     := $(shell gh auth token 2>/dev/null)
+_gh_token     := $(shell x=$$(gh auth token 2>/dev/null) && echo $$x)
 $(if $(_gh_token),,$(warning GH_TOKEN could not be resolved — run `gh auth login` or export GH_TOKEN. GitHub operations inside the container will fail.))
 
 DEV_ENV := \

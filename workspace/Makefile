@@ -52,16 +52,12 @@ DOCKER_VOLUMES := \
 	$(_vol_ssh) \
 	$(_vol_ssh_agent)
 
-# Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)
-DOCKER_TTY := $(shell test -t 0 && echo -t || true)
-
-DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
+DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
 	$(_env_ssh_agent) \
 	-e GIT_CONFIG_COUNT=1 \
 	-e GIT_CONFIG_KEY_0=safe.directory \
 	-e "GIT_CONFIG_VALUE_0=*" \
 	$(IMAGE_NAME)
-DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(DEV_ENV) $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=
 
@@ -93,11 +89,8 @@ sso-login:
 	@if [ "$$(uname -s)" = "Darwin" ]; then \
 		aws sso login --profile $(AWS_PROFILE); \
 	else \
-		aws sso login --profile $(AWS_PROFILE) --use-device-code; \
+		aws sso login --profile $(AWS_PROFILE) --no-browser --use-device-code; \
 	fi
-
-export-credentials:
-	@aws configure export-credentials --profile $(AWS_PROFILE) --format env
 
 ensure-sso:
 	@if ! aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1; then \
@@ -233,4 +226,4 @@ verify: ensure-sso
 		[ $$FAIL -eq 0 ] && echo "✅ All checks passed" || { echo "❌ Some checks failed"; exit 1; }; \
 	'
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso ensure-buildx claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login ensure-sso ensure-buildx claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify

@@ -16,13 +16,13 @@ LATEST_PYTHON ?= 3.12
 LATEST_NODE   ?= 22
 
 # Resolve GitHub token from host's gh CLI (reads macOS Keychain when needed).
-# Must be defined before AWS_ENV since := is an immediate assignment.
+# Must be defined before DEV_ENV since := is an immediate assignment.
 # On a new host: run `gh auth login` once so the Keychain (macOS) or token file (Linux) is populated,
 # or export GH_TOKEN before running make.
 _gh_token     := $(shell gh auth token 2>/dev/null)
 $(if $(_gh_token),,$(warning GH_TOKEN could not be resolved — run `gh auth login` or export GH_TOKEN. GitHub operations inside the container will fail.))
 
-AWS_ENV := \
+DEV_ENV := \
 	-e AWS_ACCESS_KEY_ID \
 	-e AWS_SECRET_ACCESS_KEY \
 	-e AWS_SESSION_TOKEN \
@@ -55,13 +55,13 @@ DOCKER_VOLUMES := \
 # Use -t only when stdin is a real TTY (fails silently otherwise on some terminals)
 DOCKER_TTY := $(shell test -t 0 && echo -t || true)
 
-DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) \
+DOCKER_RUN := docker run -i $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
 	$(_env_ssh_agent) \
 	-e GIT_CONFIG_COUNT=1 \
 	-e GIT_CONFIG_KEY_0=safe.directory \
 	-e "GIT_CONFIG_VALUE_0=*" \
 	$(IMAGE_NAME)
-DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(IMAGE_NAME)
+DOCKER_RUN_RM := docker run --rm --cap-add=SYS_TIME $(DEV_ENV) $(IMAGE_NAME)
 
 DOCKER_BUILD_ARGS ?=
 
@@ -120,7 +120,7 @@ shell: ensure-sso
 
 debug-shell: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) \
+	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
 	  --entrypoint bash $(IMAGE_NAME) \
 	  -x /usr/local/bin/entrypoint.sh /bin/bash 2>&1
 
@@ -169,97 +169,56 @@ ps list-containers:
 clean:
 	docker container prune -f
 
-inspect-config:
-	@echo "=== MCP Registry (canonical source) ==="
-	@$(DOCKER_RUN_RM) cat /home/devuser/.mcp/registry.json 2>/dev/null || echo "No registry.json found"
-	@echo ""
-	@echo "=== Claude MCP Configuration ==="
-	@$(DOCKER_RUN_RM) cat /home/devuser/.claude/settings.json 2>/dev/null || echo "No settings.json found"
-	@echo ""
-	@echo "=== Antigravity (AGY) MCP Configuration ==="
-	@$(DOCKER_RUN_RM) cat /home/devuser/.gemini/config/mcp_config.json 2>/dev/null || echo "No mcp_config.json found"
-	@echo ""
-	@echo "=== Kiro MCP Configuration ==="
-	@$(DOCKER_RUN_RM) cat /home/devuser/.kiro/settings/mcp.json 2>/dev/null || echo "No mcp.json found"
-
-verify-aws-toolkit:
-	@echo "=== AWS Agent Toolkit Verification ==="
-	@$(DOCKER_RUN_RM) bash -c "echo '1. uv (Python package manager):' && pip3 show uv && echo '2. Skills CLI:' && pip3 show skills || echo 'skills not installed'" || echo "Error running verification"
-	@echo ""
-	@echo "MCP Server: mcp-proxy-for-aws@1.6.3"
-	@echo "Endpoint: https://aws-mcp.us-east-1.api.aws/mcp"
-	@echo "Timeout: 100000ms"
-	@echo ""
-	@$(MAKE) inspect-config
-
 verify: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	echo "=== Docker Environment Verification ===" && \
-	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(AWS_ENV) $(IMAGE_NAME) bash -c ' \
-		echo ""; \
-		echo "Configuration Files:"; \
-		test -f $$HOME/.claude/settings.json && echo "  ✅ Claude config exists" || echo "  ❌ Claude config missing"; \
-		test -f $$HOME/.gemini/config/mcp_config.json && echo "  ✅ Gemini config exists" || echo "  ❌ Gemini config missing"; \
-		echo ""; \
-		echo "Global Tools:"; \
-		command -v claude >/dev/null 2>&1 && echo "  ✅ Claude CLI installed" || echo "  ❌ Claude CLI missing"; \
-		command -v agy >/dev/null 2>&1 && echo "  ✅ Antigravity CLI installed" || echo "  ❌ Antigravity CLI missing"; \
-		command -v kiro-cli >/dev/null 2>&1 && echo "  ✅ Kiro CLI installed" || echo "  ❌ Kiro CLI missing"; \
-		command -v uv >/dev/null 2>&1 && echo "  ✅ uv package manager installed" || echo "  ❌ uv missing"; \
-		echo ""; \
-		echo "System Tools:"; \
-		aws --version && echo "  ✅ AWS CLI available" || echo "  ❌ AWS CLI error"; \
-		git --version && echo "  ✅ Git available" || echo "  ❌ Git error"; \
-		python3 --version && echo "  ✅ Python 3 available" || echo "  ❌ Python 3 error"; \
-		node --version && echo "  ✅ Node.js available" || echo "  ❌ Node.js error"; \
-		echo ""; \
-		echo "SSH Configuration:"; \
-		test -d $$HOME/.ssh && echo "  ✅ SSH directory exists" || echo "  ⚠️  SSH directory missing"; \
-		test -f $$HOME/.ssh/known_hosts && grep -q github.com $$HOME/.ssh/known_hosts && echo "  ✅ GitHub host key found" || echo "  ⚠️  GitHub host key missing"; \
-		echo ""; \
-		echo "AWS Credentials:"; \
-		aws sts get-caller-identity; \
-		echo ""; \
-		echo "GitHub Authentication:"; \
-		if [ -n "$${GH_TOKEN}" ]; then \
-			echo "  ✅ GH_TOKEN is set"; \
-			if gh auth status 2>&1 | grep -q "Active account: true"; then \
-				echo "  ✅ gh CLI authenticated (active account confirmed)"; \
-				gh auth status 2>&1 | grep -E "(Logged in|Token scopes)" | sed "s/^/     /"; \
-			else \
-				echo "  ❌ GH_TOKEN set but gh auth status shows no active account"; \
-			fi; \
+	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) $(IMAGE_NAME) bash -c '\
+		FAIL=0; \
+		chk() { local label=$$1; shift; "$$@" >/dev/null 2>&1 && echo "  ✅ $$label" || { echo "  ❌ $$label"; FAIL=1; }; }; \
+		aws sts get-caller-identity >/tmp/_aws 2>&1 & \
+		if [ -n "$${GH_TOKEN}" ]; then gh auth status >/tmp/_gh 2>&1 & fi; \
+		echo "Configuration:"; \
+		chk "Claude settings.json"       python3 -m json.tool $$HOME/.claude/settings.json; \
+		chk "AGY mcp_config.json"        python3 -m json.tool $$HOME/.gemini/config/mcp_config.json; \
+		chk "Kiro mcp.json"              test -f $$HOME/.kiro/settings/mcp.json; \
+		chk "MCP registry"               test -f $$HOME/.mcp/registry.json; \
+		echo "MCP servers:"; \
+		chk "AWS MCP → Claude"           grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json; \
+		chk "AWS MCP → AGY"              grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json; \
+		chk "AWS MCP → Kiro"             grep -q mcp-proxy-for-aws $$HOME/.kiro/settings/mcp.json; \
+		chk "USAFacts → Claude"          grep -q usafacts $$HOME/.claude/settings.json; \
+		chk "USAFacts → Kiro"            grep -q usafacts $$HOME/.kiro/settings/mcp.json; \
+		echo "Model config:"; \
+		chk "Haiku 5.5 default"          grep -q us.anthropic.claude-haiku-5-5 $$HOME/.claude/settings.json; \
+		chk "Sonnet 5.5"                 grep -q us.anthropic.claude-sonnet-5-5 $$HOME/.claude/settings.json; \
+		chk "Opus 5.5"                   grep -q us.anthropic.claude-opus-5-5 $$HOME/.claude/settings.json; \
+		echo "Tools:"; \
+		chk "claude"    command -v claude; \
+		chk "agy"       command -v agy; \
+		chk "kiro-cli"  command -v kiro-cli; \
+		chk "uv"        command -v uv; \
+		chk "gh"        command -v gh; \
+		chk "aws"       command -v aws; \
+		chk "git"       command -v git; \
+		chk "python3"   command -v python3; \
+		chk "node"      command -v node; \
+		echo "SSH:"; \
+		chk "~/.ssh directory"   test -d $$HOME/.ssh; \
+		chk "GitHub host key"    grep -q github.com $$HOME/.ssh/known_hosts; \
+		wait; \
+		echo "AWS credentials:"; \
+		grep -q Account /tmp/_aws 2>/dev/null \
+			&& echo "  ✅ AWS credentials valid" \
+			|| { echo "  ❌ AWS credentials failed"; FAIL=1; }; \
+		echo "GitHub authentication:"; \
+		if [ -z "$${GH_TOKEN}" ]; then \
+			echo "  ❌ GH_TOKEN not set"; FAIL=1; \
+		elif grep -q "Active account: true" /tmp/_gh 2>/dev/null; then \
+			echo "  ✅ gh CLI authenticated"; \
 		else \
-			echo "  ⚠️  GH_TOKEN not set — GitHub operations may fail"; \
+			echo "  ❌ gh CLI not authenticated"; FAIL=1; \
 		fi; \
-	' && \
-	echo "" && \
-	echo "✅ Environment is ready for development"
+		echo ""; \
+		[ $$FAIL -eq 0 ] && echo "✅ All checks passed" || { echo "❌ Some checks failed"; exit 1; }; \
+	'
 
-test:
-	@echo "=== Building test image ===" && \
-	docker build -t $(IMAGE_NAME)-test . || { echo "Build failed"; exit 1; } && echo "Build successful"
-	@docker run --rm $(IMAGE_NAME)-test bash -c ' \
-	  echo "=== Testing Claude configuration ===" && \
-	  test -f $$HOME/.claude/settings.json            && echo "  ✓ Claude settings.json exists"  || { echo "  ✗ Claude settings.json missing"; exit 1; } && \
-	  python3 -m json.tool $$HOME/.claude/settings.json >/dev/null && echo "  ✓ Claude config is valid JSON" || { echo "  ✗ Claude config invalid"; exit 1; } && \
-	  echo "=== Testing Gemini/AGY configuration ===" && \
-	  test -f $$HOME/.gemini/config/mcp_config.json   && echo "  ✓ AGY mcp_config.json exists"   || { echo "  ✗ AGY mcp_config.json missing"; exit 1; } && \
-	  python3 -m json.tool $$HOME/.gemini/config/mcp_config.json >/dev/null && echo "  ✓ AGY config is valid JSON" || { echo "  ✗ AGY config invalid"; exit 1; } && \
-	  echo "=== Verifying AWS MCP server ===" && \
-	  grep -q mcp-proxy-for-aws $$HOME/.claude/settings.json            && echo "  ✓ AWS MCP in Claude" || { echo "  ✗ AWS MCP missing in Claude"; exit 1; } && \
-	  grep -q mcp-proxy-for-aws $$HOME/.gemini/config/mcp_config.json   && echo "  ✓ AWS MCP in AGY"    || { echo "  ✗ AWS MCP missing in AGY"; exit 1; } && \
-	  grep -q mcp-proxy-for-aws $$HOME/.kiro/settings/mcp.json           && echo "  ✓ AWS MCP in Kiro"   || { echo "  ✗ AWS MCP missing in Kiro"; exit 1; } && \
-	  grep -q usafacts $$HOME/.claude/settings.json                       && echo "  ✓ USAFacts in Claude" || { echo "  ✗ USAFacts missing in Claude"; exit 1; } && \
-	  grep -q usafacts $$HOME/.kiro/settings/mcp.json                     && echo "  ✓ USAFacts in Kiro"  || { echo "  ✗ USAFacts missing in Kiro"; exit 1; } && \
-	  test -f $$HOME/.mcp/registry.json                                   && echo "  ✓ MCP registry exists" || { echo "  ✗ MCP registry missing"; exit 1; } && \
-	  echo "=== Testing GitHub CLI ===" && \
-	  command -v gh >/dev/null 2>&1 && echo "  ✓ gh CLI installed" || { echo "  ✗ gh CLI missing"; exit 1; } && \
-	  echo "=== Verifying Claude Model Configuration ===" && \
-	  grep -q "us.anthropic.claude-haiku-5-5" $$HOME/.claude/settings.json && echo "  ✓ Haiku 5.5 set as default model" || { echo "  ✗ Haiku 5.5 not configured"; exit 1; } && \
-	  grep -q "us.anthropic.claude-sonnet-5-5" $$HOME/.claude/settings.json && echo "  ✓ Sonnet 5.5 configured" || { echo "  ✗ Sonnet 5.5 not configured"; exit 1; } && \
-	  grep -q "us.anthropic.claude-opus-5-5" $$HOME/.claude/settings.json && echo "  ✓ Opus 5.5 configured" || { echo "  ✗ Opus 5.5 not configured"; exit 1; } && \
-	  echo "=== All tests passed ==="'
-	@docker rmi $(IMAGE_NAME)-test 2>/dev/null || true
-
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify verify-aws-toolkit inspect-config test
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify

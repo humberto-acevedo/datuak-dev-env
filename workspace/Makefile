@@ -90,8 +90,11 @@ rebuild-latest: DOCKER_BUILD_ARGS = --build-arg PYTHON_VERSION=$(LATEST_PYTHON) 
 rebuild-latest: rebuild
 
 sso-login:
-	@aws sso login --profile $(AWS_PROFILE)
-	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env)
+	@if [ "$$(uname -s)" = "Darwin" ]; then \
+		aws sso login --profile $(AWS_PROFILE); \
+	else \
+		aws sso login --profile $(AWS_PROFILE) --use-device-code; \
+	fi
 
 export-credentials:
 	@aws configure export-credentials --profile $(AWS_PROFILE) --format env
@@ -99,7 +102,7 @@ export-credentials:
 ensure-sso:
 	@if ! aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1; then \
 		echo "AWS credentials expired or not present. Refreshing SSO session for profile $(AWS_PROFILE)..."; \
-		aws sso login --profile $(AWS_PROFILE); \
+		$(MAKE) --no-print-directory sso-login; \
 	fi
 
 ensure-buildx:

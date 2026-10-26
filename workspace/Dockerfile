@@ -190,13 +190,15 @@ claude_servers = build_mcp_servers(registry, "claude")
 agy_servers    = build_mcp_servers(registry, "agy")
 kiro_servers   = build_mcp_servers(registry, "kiro")
 
-claude_cfg = {
-    "mcpServers": claude_servers,
+claude_settings_cfg = {
     "permissions": {"aws:*": "allow"},
     "env": {
         "CLAUDE_CODE_USE_BEDROCK": "1",
         "AWS_REGION": region,
     },
+}
+claude_state_cfg = {
+    "mcpServers": claude_servers,
 }
 agy_cfg = {
     "mcpServers": agy_servers,
@@ -212,8 +214,11 @@ os.makedirs("/home/devuser/.kiro/settings",        exist_ok=True)
 
 with open("/home/devuser/.mcp/registry.json",             "w") as f:
     json.dump(registry, f, indent=2)
+# mcpServers must live in ~/.claude.json (user state); settings.json does not expose MCP servers to /mcp
+with open("/home/devuser/.claude.json",                   "w") as f:
+    json.dump(claude_state_cfg, f, indent=2)
 with open("/home/devuser/.claude/settings.json",          "w") as f:
-    json.dump(claude_cfg, f, indent=2)
+    json.dump(claude_settings_cfg, f, indent=2)
 with open("/home/devuser/.gemini/config/mcp_config.json", "w") as f:
     json.dump(agy_cfg, f, indent=2)
 with open("/home/devuser/.kiro/settings/mcp.json",        "w") as f:

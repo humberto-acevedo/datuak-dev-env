@@ -68,7 +68,7 @@ DOCKER_BUILD_ARGS ?=
 build:
 	docker build $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAME) .
 
-build-cached: ensure-sso
+build-cached: ensure-sso ensure-buildx
 	@echo "Logging into ECR..."
 	@aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URI)
 	@echo "Building with ECR layer cache (BuildKit registry backend)..."
@@ -101,6 +101,15 @@ ensure-sso:
 		echo "AWS credentials expired or not present. Refreshing SSO session for profile $(AWS_PROFILE)..."; \
 		aws sso login --profile $(AWS_PROFILE); \
 	fi
+
+ensure-buildx:
+	@if ! docker buildx ls 2>/dev/null | grep -q "buildkit-builder"; then \
+		echo "buildkit-builder not found — creating with docker-container driver..."; \
+		docker buildx create --name buildkit-builder --driver docker-container --use; \
+	else \
+		docker buildx use buildkit-builder; \
+	fi
+	@docker buildx inspect --bootstrap >/dev/null
 
 _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && $(DOCKER_RUN) $(1)
 
@@ -221,4 +230,4 @@ verify: ensure-sso
 		[ $$FAIL -eq 0 ] && echo "✅ All checks passed" || { echo "❌ Some checks failed"; exit 1; }; \
 	'
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login export-credentials ensure-sso ensure-buildx claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify

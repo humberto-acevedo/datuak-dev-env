@@ -140,10 +140,6 @@ import json, os
 endpoint   = os.environ["MCP_AWS_ENDPOINT"]
 version    = os.environ["MCP_AWS_VERSION"]
 region     = os.environ["AWS_REGION"]
-model      = "us.anthropic.claude-haiku-5-5"
-small_fast = "us.anthropic.claude-sonnet-5-5"
-large      = "us.anthropic.claude-opus-5-5"
-ultra_fast = "us.anthropic.claude-haiku-5-5"
 
 registry = {
     "version": "1",
@@ -172,7 +168,7 @@ registry = {
             "auto_load": ["claude", "kiro"],
             "config": {
                 "transport": "http",
-                "url": "https://usafacts.org/mcp/",
+                "url": "https://data.mcp.usafacts.org/mcp",
             },
         },
     },
@@ -200,13 +196,6 @@ claude_cfg = {
     "env": {
         "CLAUDE_CODE_USE_BEDROCK": "1",
         "AWS_REGION": region,
-    },
-    "modelSettings": {
-        "model": model,
-        "smallFastModel": small_fast,
-        "largeModel": large,
-        "ultraFastModel": ultra_fast,
-        "maxOutputTokens": 16384,
     },
 }
 agy_cfg = {

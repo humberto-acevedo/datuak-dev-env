@@ -1,1 +1,9 @@
 .env
+
+# Build artifacts
+*.log
+build.log
+cached-build.log
+
+# Memory/analysis files (not code documentation)
+memory/

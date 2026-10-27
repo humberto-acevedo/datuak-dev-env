@@ -10,10 +10,7 @@
 
 ## Summary
 
-The `start-and-connect.sh` script fails at Step 4 (SSM connect) because the workspace
-never appears in `aws ssm describe-instance-information`. The SSM agent is installed and
-running on the workspace but cannot obtain IAM credentials, so it never completes
-registration with the SSM service.
+The `start-and-connect.sh` script fails at Step 4 (SSM connect) because the workspace never appears in `aws ssm describe-instance-information`. The SSM agent is installed and running on the workspace but cannot obtain IAM credentials, so it never completes registration with the SSM service.
 
 ---
 
@@ -62,13 +59,9 @@ ERROR [CredentialRefresher] Retrieve crede...   status code: 400
 
 ### 5. Root cause
 
-The SSM agent is attempting to obtain credentials via the **EC2 Instance Metadata Service
-(IMDS)** at `169.254.169.254`. WorkSpaces Personal on Ubuntu do not expose IMDS the same
-way EC2 instances do — the endpoint either doesn't respond or returns 404/400 for IAM
-credential requests.
+The SSM agent is attempting to obtain credentials via the **EC2 Instance Metadata Service (IMDS)** at `169.254.169.254`. WorkSpaces Personal on Ubuntu do not expose IMDS the same way EC2 instances do — the endpoint either doesn't respond or returns 404/400 for IAM credential requests.
 
-Without credentials, the agent cannot authenticate to the SSM service and therefore never
-registers as a managed instance. This is why `InstanceInformationList` is always empty.
+Without credentials, the agent cannot authenticate to the SSM service and therefore never registers as a managed instance. This is why `InstanceInformationList` is always empty.
 
 ### 6. No hybrid activation exists
 
@@ -82,8 +75,7 @@ The workspace has never been registered via hybrid activation.
 
 ## Proposed Fix
 
-Register the workspace as an SSM **hybrid managed instance** using an activation code.
-This bypasses IMDS entirely and gives the agent explicit credentials to register with SSM.
+Register the workspace as an SSM **hybrid managed instance** using an activation code. This bypasses IMDS entirely and gives the agent explicit credentials to register with SSM.
 
 ### Step 1 — Create a hybrid activation (run on your Mac)
 
@@ -144,35 +136,27 @@ aws ssm describe-instance-information \
 ```
 
 The instance will appear with an `mi-xxxxxxxxxx` ID (managed instance format).
-The `start-and-connect.sh` script matches by `ComputerName`, so this format is handled
-automatically.
+The `start-and-connect.sh` script matches by `ComputerName`, so this format is handled automatically.
 
 ---
 
 ## Script Changes Made
 
-`start-and-connect.sh` was updated alongside this investigation to handle delayed SSM
-registration more gracefully:
+`start-and-connect.sh` was updated alongside this investigation to handle delayed SSM registration more gracefully:
 
 - Added `SSM_WAIT_TIMEOUT=300` (5 min) and `SSM_POLL_INTERVAL=15` to the defaults block.
 - Extracted SSM matching logic into a reusable `_try_match_ssm_instance()` helper.
-- Added a **Step 3 polling loop**: after the workspace reaches AVAILABLE, the script now
-  retries SSM lookup every 15 seconds for up to 5 minutes before falling through to the
-  manual prompt.
+- Added a **Step 3 polling loop**: after the workspace reaches AVAILABLE, the script now retries SSM lookup every 15 seconds for up to 5 minutes before falling through to the manual prompt.
 - Added `--ssm-timeout <seconds>` CLI flag to override the SSM wait duration.
 - Manual instance selection is now Step 4 (fallback only if polling times out).
 
-These changes mean that once the hybrid activation fix is applied, the script will handle
-normal SSM startup delays automatically on future runs.
+These changes mean that once the hybrid activation fix is applied, the script will handle normal SSM startup delays automatically on future runs.
 
 ---
 
 ## Notes
 
-- The activation code expires after 1 day by default. If step 2 isn't completed in time,
-  re-run step 1 to get a new code.
-- Once registered, the hybrid activation itself can be deleted — registration is persistent
-  in `/etc/amazon/ssm/registration` on the workspace.
+- The activation code expires after 1 day by default. If step 2 isn't completed in time, re-run step 1 to get a new code.
+- Once registered, the hybrid activation itself can be deleted — registration is persistent in `/etc/amazon/ssm/registration` on the workspace.
 - If the workspace is rebuilt or re-provisioned, steps 1–3 will need to be repeated.
-- To make this permanent across rebuilds, consider adding the registration commands to a
-  WorkSpaces bootstrap/provisioning script.
+- To make this permanent across rebuilds, consider adding the registration commands to a WorkSpaces bootstrap/provisioning script.

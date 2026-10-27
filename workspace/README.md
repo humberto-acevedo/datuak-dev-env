@@ -59,9 +59,9 @@ make build-cached # 30-60 sec rebuild with layer caching
 ## Container Features
 
 ### AWS Bedrock Integration
-- **Claude 5.5 models** via AWS Bedrock cross-region inference
-- **Default**: Haiku 5.5 (fast, cost-effective)
-- **Available**: Sonnet 5.5, Opus 5.5
+- **Claude models** via AWS Bedrock
+- **Available**: Haiku 4.5 (fast, cost-effective)
+- **Sales-gated** (unavailable): Sonnet 5.5, Opus 5.5 — see [bedrock-model-access-audit.md](../docs/bedrock-model-access-audit.md)
 - **MCP Server**: AWS integration via mcp-proxy-for-aws@1.6.3
 
 ### Persistent Storage
@@ -107,7 +107,7 @@ make rebuild            # Force clean build, no cache (10+ min)
 make build-latest       # Build with latest Python/Node versions
 ```
 
-**See [docs/DOCKER_CACHE_OPTIMIZATION.md](docs/DOCKER_CACHE_OPTIMIZATION.md) for detailed caching architecture.**
+**See [../docs/BUILD_CACHE_OPTIMIZATION.md](../docs/BUILD_CACHE_OPTIMIZATION.md) for detailed caching architecture.**
 
 ## Architecture
 
@@ -163,7 +163,7 @@ Create `.env` file in workspace directory:
 ```bash
 AWS_PROFILE=default
 REGION=us-east-1
-ANTHROPIC_MODEL=us.anthropic.claude-haiku-5-5
+ANTHROPIC_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
 KIRO_API_KEY=your-key-here
 ```
 
@@ -310,9 +310,8 @@ docker image prune -a
 
 ## Documentation
 
-- **[DOCKER_CACHE_OPTIMIZATION.md](docs/DOCKER_CACHE_OPTIMIZATION.md)** - Detailed cache architecture, root cause analysis, optimization guide
-- **[BUILD_CACHING.md](docs/BUILD_CACHING.md)** - Legacy caching reference
-- **[BEDROCK_MODEL_ACCESS.md](docs/BEDROCK_MODEL_ACCESS.md)** - AWS Bedrock model access status
+- **[BUILD_CACHE_OPTIMIZATION.md](../docs/BUILD_CACHE_OPTIMIZATION.md)** - Detailed cache architecture, root cause analysis, optimization guide
+- **[bedrock-model-access-audit.md](../docs/bedrock-model-access-audit.md)** - AWS Bedrock model access status
 
 ## Requirements
 
@@ -348,6 +347,6 @@ Internal development environment for Datuak team.
 ## Support
 
 Issues or questions? Check:
-1. [BUILD_CACHING.md](docs/BUILD_CACHING.md) - Build and cache troubleshooting
+1. [BUILD_CACHE_OPTIMIZATION.md](../docs/BUILD_CACHE_OPTIMIZATION.md) - Build and cache troubleshooting
 2. `make verify` - Environment validation
 3. Container logs: `docker logs <container-id>`

@@ -194,7 +194,7 @@ _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROF
 
 
 # Interactive targets (all fetch temporary AWS STS credentials via SSO)
-# WIF is default; fetch-secrets provides API key fallback if needed
+# WIF is default for Anthropic authentication
 claude: ensure-sso sync-from-s3
 	@echo "🚀 Launching Claude Code (using Anthropic WIF)..."
 	@$(call _run-with-creds,claude)
@@ -341,7 +341,6 @@ help:
 	@echo "  make sso-login               Refresh AWS SSO session (called automatically)"
 	@echo "  make ensure-sso              Check SSO session validity"
 	@echo "  make secrets-setup           Show how to create AWS Secrets Manager entries"
-	@echo "  make fetch-secrets           Fetch ANTHROPIC_API_KEY from Secrets Manager"
 	@echo ""
 	@echo "⚙️  CONTEXT PERSISTENCE:"
 	@echo "  ~/.claude/                   Claude Code sessions, settings, skills, memory (mounted)"
@@ -390,4 +389,4 @@ help:
 	@echo "  LATEST_NODE                  Node version for 'build-latest' (default: $(LATEST_NODE))"
 	@echo ""
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login ensure-sso ensure-buildx secrets-setup fetch-secrets sync-setup sync-from-s3 sync-to-s3 list-remote-contexts claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify help
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login ensure-sso ensure-buildx secrets-setup sync-setup sync-from-s3 sync-to-s3 list-remote-contexts claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify help

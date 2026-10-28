@@ -154,11 +154,14 @@ make verify
 Create `.env` file in workspace directory, or export before running:
 
 ```bash
-AWS_PROFILE=default
+AWS_PROFILE=AdministratorAccess-539247495490
 AWS_REGION=us-east-1
+AWS_ROLE_ARN=arn:aws:iam::539247495490:role/anthropic-workload-identity
 KIRO_API_KEY=your-key-here
 GH_TOKEN=github_token_here
 ```
+
+**Anthropic Authentication**: Uses Workload Identity Federation (WIF) — no API keys stored. See [docs/ANTHROPIC_WIF_SETUP.md](docs/ANTHROPIC_WIF_SETUP.md).
 
 ## Make Commands
 
@@ -226,10 +229,10 @@ make clean              # Remove stopped containers
 ## Credentials & Security
 
 ### Automatic Credential Management
-- SSO credentials auto-refresh via `make ensure-sso`
-- Temporary session tokens (auto-expire)
-- API keys fetched from AWS Secrets Manager at runtime
-- No hardcoded credentials
+- **AWS**: SSO credentials auto-refresh via `make ensure-sso` (temporary, auto-expire)
+- **Anthropic**: Workload Identity Federation (WIF) — AWS STS signs JWT tokens exchanged for Anthropic access tokens
+- **Optional APIs**: Other API keys fetched from AWS Secrets Manager at runtime
+- No hardcoded credentials stored
 
 ### Audit & Compliance
 - CloudTrail logs all AWS API calls with `aws:ViaAWSMCPService` flag

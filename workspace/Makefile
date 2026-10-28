@@ -104,24 +104,14 @@ ensure-sso:
 
 secrets-setup: ensure-sso
 	@echo "=== Setting up AWS Secrets Manager for persistent credentials ==="
-	@echo "Secrets stored here will be fetched at session start."
 	@echo "Create secrets for:"
-	@echo "  - ANTHROPIC_API_KEY (first-party Anthropic API key)"
 	@echo "  - KIRO_API_KEY (if using Kiro)"
 	@echo "  - GH_TOKEN (GitHub personal access token, if not using gh cli)"
 	@echo ""
-	@echo "Example: aws secretsmanager create-secret --name claude/anthropic-api-key --secret-string 'sk-ant-v0-...'"
+	@echo "Example: aws secretsmanager create-secret --name kiro-api-key --secret-string 'sk-...'"
 	@echo ""
-	@echo "Note: AWS temporary credentials are provided automatically via SSO login above."
-
-fetch-secrets: ensure-sso
-	@echo "Fetching secrets from AWS Secrets Manager..."
-	@if ANTHROPIC_KEY=$$(aws secretsmanager get-secret-value --secret-id claude/anthropic-api-key --query SecretString --output text 2>/dev/null); then \
-		export ANTHROPIC_API_KEY=$$ANTHROPIC_KEY; \
-		echo "✅ ANTHROPIC_API_KEY loaded from Secrets Manager"; \
-	else \
-		echo "⚠️  claude/anthropic-api-key not found in Secrets Manager"; \
-	fi
+	@echo "Note: Anthropic authentication uses Workload Identity Federation (WIF)."
+	@echo "      No API key storage needed — AWS STS credentials exchange for tokens."
 
 ensure-buildx:
 	@if ! docker buildx ls 2>/dev/null | grep -q "buildkit-builder"; then \
@@ -197,14 +187,15 @@ _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROF
 
 
 # Interactive targets (all fetch temporary AWS STS credentials via SSO)
-claude: ensure-sso sync-from-s3 fetch-secrets
-	@echo "🚀 Launching Claude Code..."
+# WIF is default; fetch-secrets provides API key fallback if needed
+claude: ensure-sso sync-from-s3
+	@echo "🚀 Launching Claude Code (using Anthropic WIF)..."
 	@$(call _run-with-creds,claude)
 	@echo "📤 Syncing context back to S3..."
 	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
 
 antigravity agy: ensure-sso sync-from-s3
-	@echo "🚀 Launching AGY (Antigravity)..."
+	@echo "🚀 Launching Antigravity..."
 	@$(call _run-with-creds,agy)
 	@echo "📤 Syncing context back to S3..."
 	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)

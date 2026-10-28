@@ -5,9 +5,10 @@ export
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
 
+# Configuration: AWS account ID + derived WIF role (see .env to override ACCOUNT_ID)
 IMAGE_NAME=datuak-workspace
-AWS_PROFILE ?= AdministratorAccess-539247495490
-ACCOUNT_ID=539247495490
+ACCOUNT_ID ?= 539247495490
+AWS_PROFILE ?= AdministratorAccess-$(ACCOUNT_ID)
 REGION ?= us-east-1
 AWS_ROLE_ARN=arn:aws:iam::$(ACCOUNT_ID):role/anthropic-workload-identity
 ECR_URI=$(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME)

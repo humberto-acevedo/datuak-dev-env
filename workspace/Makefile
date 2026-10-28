@@ -10,6 +10,7 @@ AWS_PROFILE ?= default
 ACCOUNT_ID=$(shell aws sts get-caller-identity --profile $(AWS_PROFILE) --query Account --output text 2>/dev/null)
 REGION ?= us-east-1
 ECR_URI=$(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME)
+CLAUDE_CONTEXT_BUCKET ?= claude-context-$(ACCOUNT_ID)
 IDEAS_DIR=$(HOME)/Documents/Ideas
 TOOLS_CODE_DIR=$(HOME)/Development/tools-code
 LATEST_PYTHON ?= 3.12
@@ -47,6 +48,9 @@ endif
 
 DOCKER_VOLUMES := \
 	-v "$$PWD/../..":/workspace \
+	-v "$(HOME)/.claude:/home/devuser/.claude" \
+	-v "$(HOME)/.gemini:/home/devuser/.gemini" \
+	-v "$(HOME)/.config/gh:/home/devuser/.config/gh:ro" \
 	$(_vol_ideas) \
 	$(_vol_tools) \
 	$(_vol_ssh) \
@@ -98,6 +102,27 @@ ensure-sso:
 		$(MAKE) --no-print-directory sso-login; \
 	fi
 
+secrets-setup: ensure-sso
+	@echo "=== Setting up AWS Secrets Manager for persistent credentials ==="
+	@echo "Secrets stored here will be fetched at session start."
+	@echo "Create secrets for:"
+	@echo "  - ANTHROPIC_API_KEY (first-party Anthropic API key)"
+	@echo "  - KIRO_API_KEY (if using Kiro)"
+	@echo "  - GH_TOKEN (GitHub personal access token, if not using gh cli)"
+	@echo ""
+	@echo "Example: aws secretsmanager create-secret --name claude/anthropic-api-key --secret-string 'sk-ant-v0-...'"
+	@echo ""
+	@echo "Note: AWS temporary credentials are provided automatically via SSO login above."
+
+fetch-secrets: ensure-sso
+	@echo "Fetching secrets from AWS Secrets Manager..."
+	@if ANTHROPIC_KEY=$$(aws secretsmanager get-secret-value --secret-id claude/anthropic-api-key --query SecretString --output text 2>/dev/null); then \
+		export ANTHROPIC_API_KEY=$$ANTHROPIC_KEY; \
+		echo "✅ ANTHROPIC_API_KEY loaded from Secrets Manager"; \
+	else \
+		echo "⚠️  claude/anthropic-api-key not found in Secrets Manager"; \
+	fi
+
 ensure-buildx:
 	@if ! docker buildx ls 2>/dev/null | grep -q "buildkit-builder"; then \
 		echo "buildkit-builder not found — creating with docker-container driver..."; \
@@ -107,21 +132,76 @@ ensure-buildx:
 	fi
 	@docker buildx inspect --bootstrap >/dev/null
 
+# === Multi-host Context Sync (Phase 1: One-way S3 master) ===
+
+sync-setup: ensure-sso
+	@echo "🔧 Setting up multi-host Claude context sync..."
+	@bash scripts/sync-setup.sh $(AWS_PROFILE)
+
+sync-to-s3: ensure-sso
+	@if [ ! -d "$(HOME)/.claude" ]; then \
+		echo "⚠️  ~/.claude does not exist — nothing to sync"; \
+		exit 0; \
+	fi
+	@echo "📤 Uploading ~/.claude to S3 (shared master)..."
+	@aws s3 sync \
+		$(HOME)/.claude \
+		s3://$(CLAUDE_CONTEXT_BUCKET)/.claude \
+		--region $(REGION) \
+		--profile $(AWS_PROFILE) \
+		--delete \
+		--sse AES256 \
+		--exclude "*.tmp" \
+		--exclude ".git/*" \
+		--exclude "*.lock" \
+		--exclude ".DS_Store"
+	@echo "✅ Context synced to S3"
+
+sync-from-s3: ensure-sso
+	@echo "📥 Downloading ~/.claude from S3 (shared master)..."
+	@mkdir -p $(HOME)/.claude
+	@aws s3 sync \
+		s3://$(CLAUDE_CONTEXT_BUCKET)/.claude \
+		$(HOME)/.claude \
+		--region $(REGION) \
+		--profile $(AWS_PROFILE) \
+		--sse AES256 \
+		--exclude "*.tmp" \
+		--exclude ".git/*" \
+		--exclude "*.lock"
+	@echo "✅ Context synced from S3"
+
+list-remote-contexts:
+	@echo "📋 Remote Claude contexts in S3:"
+	@aws s3 ls s3://$(CLAUDE_CONTEXT_BUCKET)/ --region $(REGION) --profile $(AWS_PROFILE) --recursive | grep -E "(sessions|skills|memory|settings)" || echo "  (none found)"
+
 _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && $(DOCKER_RUN) $(1)
 
 
-# Interactive targets
-claude: ensure-sso
+# Interactive targets (all fetch temporary AWS STS credentials via SSO)
+claude: ensure-sso sync-from-s3 fetch-secrets
+	@echo "🚀 Launching Claude Code..."
 	@$(call _run-with-creds,claude)
+	@echo "📤 Syncing context back to S3..."
+	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
 
-antigravity agy: ensure-sso
+antigravity agy: ensure-sso sync-from-s3
+	@echo "🚀 Launching AGY (Antigravity)..."
 	@$(call _run-with-creds,agy)
+	@echo "📤 Syncing context back to S3..."
+	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
 
-kiro: ensure-sso
+kiro: ensure-sso sync-from-s3
+	@echo "🚀 Launching Kiro..."
 	@$(call _run-with-creds,kiro-cli)
+	@echo "📤 Syncing context back to S3..."
+	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
 
-shell: ensure-sso
+shell: ensure-sso sync-from-s3
+	@echo "🚀 Launching shell..."
 	@$(call _run-with-creds,/bin/bash)
+	@echo "📤 Syncing context back to S3..."
+	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
 
 debug-shell: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
@@ -226,4 +306,72 @@ verify: ensure-sso
 		[ $$FAIL -eq 0 ] && echo "✅ All checks passed" || { echo "❌ Some checks failed"; exit 1; }; \
 	'
 
-.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login ensure-sso ensure-buildx claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify
+help:
+	@echo "=== datuak-dev-env — Claude Code development environment ==="
+	@echo ""
+	@echo "📋 QUICK START:"
+	@echo "  make claude                  Launch Claude Code (auto-syncs context)"
+	@echo "  make agy                     Launch AGY (auto-syncs context)"
+	@echo "  make kiro                    Launch Kiro (auto-syncs context)"
+	@echo "  make shell                   Interactive bash shell (auto-syncs context)"
+	@echo ""
+	@echo "🏗️  BUILD:"
+	@echo "  make build                   Build image locally (no cache)"
+	@echo "  make build-cached            Build with ECR layer cache (BuildKit)"
+	@echo "  make rebuild                 Full rebuild without cache"
+	@echo "  make build-latest            Build with latest Python/Node versions"
+	@echo ""
+	@echo "🔐 AWS & CREDENTIALS:"
+	@echo "  make sso-login               Refresh AWS SSO session (called automatically)"
+	@echo "  make ensure-sso              Check SSO session validity"
+	@echo "  make secrets-setup           Show how to create AWS Secrets Manager entries"
+	@echo "  make fetch-secrets           Fetch ANTHROPIC_API_KEY from Secrets Manager"
+	@echo ""
+	@echo "⚙️  CONTEXT PERSISTENCE:"
+	@echo "  ~/.claude/                   Claude Code sessions, settings, skills, memory (mounted)"
+	@echo "  ~/.gemini/                   Gemini/AGY config (mounted)"
+	@echo "  ~/.ssh/                      SSH keys (mounted read-only)"
+	@echo "  ~/.config/gh/                GitHub CLI config (mounted read-only)"
+	@echo "  /workspace                   Your code (mounted)"
+	@echo ""
+	@echo "  → Persists across container restarts. New container retains all context."
+	@echo ""
+	@echo "🔒 SECURITY:"
+	@echo "  1. Never commit secrets to .env — use AWS Secrets Manager:"
+	@echo "     aws secretsmanager create-secret --name claude/anthropic-api-key --secret-string 'sk-ant-v0-...'"
+	@echo ""
+	@echo "  2. AWS temporary credentials are auto-provided via:"
+	@echo "     aws sso login --profile $(AWS_PROFILE)  # Run once per ~12 hours"
+	@echo ""
+	@echo "  3. .env is local-only (never committed). Temporary creds override it at runtime:"
+	@echo "     make claude                  # aws configure export-credentials is called automatically"
+	@echo ""
+	@echo "☁️  MULTI-HOST SYNC (S3):"
+	@echo "  make sync-setup              One-time: create S3 bucket, encryption, versioning"
+	@echo "  make sync-from-s3            Download latest context from S3"
+	@echo "  make sync-to-s3              Upload context to S3"
+	@echo "  make list-remote-contexts    List all synced contexts by hostname"
+	@echo ""
+	@echo "  📌 Auto-sync: 'make claude' downloads before and uploads after!"
+	@echo ""
+	@echo "🧪 VERIFICATION:"
+	@echo "  make verify                  Check all tools, credentials, and MCP servers"
+	@echo ""
+	@echo "📦 REGISTRY:"
+	@echo "  make push                    Push image to ECR (with layer cache)"
+	@echo "  make pull                    Pull latest image from ECR"
+	@echo "  make save                    Save image to .tar.gz"
+	@echo "  make load                    Load image from .tar.gz"
+	@echo ""
+	@echo "🧹 MAINTENANCE:"
+	@echo "  make clean                   Prune unused containers"
+	@echo "  make ps                      List running containers"
+	@echo ""
+	@echo "📝 ENVIRONMENT:"
+	@echo "  AWS_PROFILE                  AWS SSO profile (default: $(AWS_PROFILE))"
+	@echo "  REGION                       AWS region (default: $(REGION))"
+	@echo "  LATEST_PYTHON                Python version for 'build-latest' (default: $(LATEST_PYTHON))"
+	@echo "  LATEST_NODE                  Node version for 'build-latest' (default: $(LATEST_NODE))"
+	@echo ""
+
+.PHONY: build build-cached rebuild build-latest rebuild-latest sso-login ensure-sso ensure-buildx secrets-setup fetch-secrets sync-setup sync-from-s3 sync-to-s3 list-remote-contexts claude antigravity agy kiro shell debug-shell push pull save load ps list-containers clean verify help

@@ -31,7 +31,7 @@ DEV_ENV := \
 	-e AWS_SESSION_TOKEN \
 	-e AWS_REGION \
 	-e AWS_ACCOUNT \
-	-e AWS_ROLE_ARN \
+	-e AWS_ROLE_ARN=$(AWS_ROLE_ARN) \
 	-e KIRO_API_KEY \
 	-e GH_TOKEN \
 	$(if $(_gh_token),-e GH_TOKEN=$(_gh_token)) \

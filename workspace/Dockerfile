@@ -193,7 +193,7 @@ kiro_servers   = build_mcp_servers(registry, "kiro")
 claude_settings_cfg = {
     "permissions": {"aws:*": "allow"},
     "env": {
-        "CLAUDE_CODE_USE_BEDROCK": "1",
+        "CLAUDE_CODE_USE_BEDROCK": "0",
         "AWS_REGION": region,
     },
 }

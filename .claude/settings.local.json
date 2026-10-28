@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws bedrock *)",
+      "Bash(python3 *)",
+      "Bash(make -n shell)",
+      "Read(//home/devuser/.claude/**)",
+      "Read(//home/devuser/.mcp/**)",
+      "Read(//home/devuser/.kiro/settings/**)"
+    ]
+  }
+}

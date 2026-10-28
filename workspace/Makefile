@@ -132,6 +132,24 @@ ensure-buildx:
 	fi
 	@docker buildx inspect --bootstrap >/dev/null
 
+# === Anthropic Workload Identity Federation (WIF) Setup ===
+
+wif-deploy: ensure-sso
+	@echo "🔐 Deploying Anthropic WIF infrastructure with CDK..."
+	@cd ../infra && npx cdk deploy AnthropicWIFStack --require-approval never
+
+wif-describe: ensure-sso
+	@echo "🔍 Getting WIF role information..."
+	@aws cloudformation describe-stacks --stack-name AnthropicWIFStack --region $(REGION) --query 'Stacks[0].Outputs' --output table 2>/dev/null || echo "❌ Stack not found. Run 'make wif-deploy' first."
+
+wif-test: ensure-sso
+	@echo "✅ Testing Anthropic WIF authentication..."
+	@aws sts get-caller-identity | grep -q '"Account"' && echo "✅ AWS credentials valid" || echo "❌ AWS credentials invalid"
+
+wif-docs:
+	@echo "📖 Anthropic WIF Documentation: see docs/ANTHROPIC_WIF_SETUP.md"
+	@cat docs/ANTHROPIC_WIF_SETUP.md | head -50
+
 # === Multi-host Context Sync (Phase 1: One-way S3 master) ===
 
 sync-setup: ensure-sso

@@ -152,6 +152,7 @@ sync-to-s3: ensure-sso
 		exit 0; \
 	fi
 	@echo "📤 Uploading ~/.claude to S3 (shared master)..."
+	@find -L $(HOME)/.claude -maxdepth 3 -type l -delete 2>/dev/null || true
 	@aws s3 sync \
 		$(HOME)/.claude \
 		s3://$(CLAUDE_CONTEXT_BUCKET)/.claude \
@@ -162,12 +163,14 @@ sync-to-s3: ensure-sso
 		--exclude "*.tmp" \
 		--exclude ".git/*" \
 		--exclude "*.lock" \
-		--exclude ".DS_Store"
+		--exclude ".DS_Store" \
+		--exclude "debug/*"
 	@echo "✅ Context synced to S3"
 
 sync-from-s3: ensure-sso
 	@echo "📥 Downloading ~/.claude from S3 (shared master)..."
 	@mkdir -p $(HOME)/.claude
+	@find -L $(HOME)/.claude -maxdepth 3 -type l -delete 2>/dev/null || true
 	@aws s3 sync \
 		s3://$(CLAUDE_CONTEXT_BUCKET)/.claude \
 		$(HOME)/.claude \
@@ -176,7 +179,8 @@ sync-from-s3: ensure-sso
 		--sse AES256 \
 		--exclude "*.tmp" \
 		--exclude ".git/*" \
-		--exclude "*.lock"
+		--exclude "*.lock" \
+		--exclude "debug/*"
 	@echo "✅ Context synced from S3"
 
 list-remote-contexts:

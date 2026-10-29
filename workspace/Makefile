@@ -5,12 +5,11 @@ export
 export DOCKER_BUILDKIT=1
 export BUILDKIT_PROGRESS=plain
 
-# Configuration: AWS account ID + derived WIF role (see .env to override ACCOUNT_ID)
+# Configuration: AWS account ID (see .env to override ACCOUNT_ID)
 IMAGE_NAME=datuak-workspace
 ACCOUNT_ID ?= 539247495490
 AWS_PROFILE ?= AdministratorAccess-$(ACCOUNT_ID)
 REGION ?= us-east-1
-AWS_ROLE_ARN=arn:aws:iam::$(ACCOUNT_ID):role/anthropic-workload-identity
 ECR_URI=$(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME)
 CLAUDE_CONTEXT_BUCKET ?= claude-context-$(ACCOUNT_ID)
 IDEAS_DIR=$(HOME)/Documents/Ideas
@@ -37,7 +36,6 @@ DEV_ENV := \
 	-e AWS_SESSION_TOKEN \
 	-e AWS_REGION \
 	-e AWS_ACCOUNT \
-	-e AWS_ROLE_ARN=$(AWS_ROLE_ARN) \
 	-e CLAUDE_CODE_USE_BEDROCK=$(CLAUDE_CODE_USE_BEDROCK) \
 	-e KIRO_API_KEY \
 	-e GH_TOKEN \
@@ -69,14 +67,15 @@ DOCKER_VOLUMES := \
 # First-party API: pass the WIF IDs, and mount the identity token the host mints into a
 # per-run directory (WIF_TOKEN_DIR, set by _run-with-creds). Bedrock gets neither, since
 # Claude Code would otherwise try federation instead of Bedrock.
-ifeq ($(CLAUDE_CODE_USE_BEDROCK),1)
-_wif_run_args :=
-else
-_wif_run_args := \
+_wif_ids := \
 	-e ANTHROPIC_ORGANIZATION_ID \
 	-e ANTHROPIC_FEDERATION_RULE_ID \
 	-e ANTHROPIC_SERVICE_ACCOUNT_ID \
-	-e ANTHROPIC_WORKSPACE_ID \
+	-e ANTHROPIC_WORKSPACE_ID
+ifeq ($(CLAUDE_CODE_USE_BEDROCK),1)
+_wif_run_args :=
+else
+_wif_run_args := $(_wif_ids) \
 	-v "$$WIF_TOKEN_DIR":/run/anthropic-wif:ro \
 	-e ANTHROPIC_IDENTITY_TOKEN_FILE=/run/anthropic-wif/token
 endif
@@ -153,14 +152,6 @@ ensure-buildx:
 
 # === Anthropic Workload Identity Federation (WIF) Setup ===
 
-wif-deploy: ensure-sso
-	@echo "🔐 Deploying Anthropic WIF infrastructure with CDK..."
-	@cd ../infra && npx cdk deploy AnthropicWIFStack --require-approval never
-
-wif-describe: ensure-sso
-	@echo "🔍 Getting WIF role information..."
-	@aws cloudformation describe-stacks --stack-name AnthropicWIFStack --region $(REGION) --query 'Stacks[0].Outputs' --output table 2>/dev/null || echo "❌ Stack not found. Run 'make wif-deploy' first."
-
 # End-to-end check: Claude Code in the container must answer without a login prompt
 wif-test: ensure-sso
 	@echo "🧪 Testing Claude Code auth in the container (CLAUDE_CODE_USE_BEDROCK=$(CLAUDE_CODE_USE_BEDROCK))..."
@@ -168,10 +159,6 @@ wif-test: ensure-sso
 
 wif-setup: ensure-sso
 	@bash scripts/setup-anthropic-wif.sh $(ARGS)
-
-wif-docs:
-	@echo "📖 Anthropic WIF Documentation: see docs/ANTHROPIC_WIF_SETUP.md"
-	@cat docs/ANTHROPIC_WIF_SETUP.md | head -50
 
 # === Multi-host Context Sync (Phase 1: One-way S3 master) ===
 
@@ -308,7 +295,7 @@ clean:
 
 verify: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) $(IMAGE_NAME) bash -c '\
+	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) $(_wif_ids) $(IMAGE_NAME) bash -c '\
 		FAIL=0; \
 		chk() { local label=$$1; shift; "$$@" >/dev/null 2>&1 && echo "  ✅ $$label" || { echo "  ❌ $$label"; FAIL=1; }; }; \
 		aws sts get-caller-identity >/tmp/_aws 2>&1 & \
@@ -394,8 +381,8 @@ help:
 	@echo "  → Persists across container restarts. New container retains all context."
 	@echo ""
 	@echo "🔒 SECURITY:"
-	@echo "  1. Never commit secrets to .env — use AWS Secrets Manager:"
-	@echo "     aws secretsmanager create-secret --name claude/anthropic-api-key --secret-string 'sk-ant-v0-...'"
+	@echo "  1. Never commit secrets to .env — use AWS Secrets Manager (see make secrets-setup)."
+	@echo "     Claude Code needs no API key: it authenticates with Anthropic WIF (make wif-setup)."
 	@echo ""
 	@echo "  2. AWS temporary credentials are auto-provided via:"
 	@echo "     aws sso login --profile $(AWS_PROFILE)  # Run once per ~12 hours"

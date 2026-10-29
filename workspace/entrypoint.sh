@@ -5,14 +5,7 @@ set -eo pipefail
 # Tools (claude, agy, kiro) are installed globally to /usr/local/bin at build time
 # so no extra PATH manipulation is needed here.
 
-# Show Claude environment configuration
-CLAUDE_ENV="${CLAUDE_ENVIRONMENT:-development}"
-echo "🤖 Claude Environment: $CLAUDE_ENV"
-if [[ "$CLAUDE_ENV" == "production" ]]; then
-  echo "   → Using AWS Bedrock endpoints (VPC-isolated, 10% cost premium)"
-else
-  echo "   → Using Global endpoints (cost-efficient)"
-fi
+echo "🤖 Claude Code configuration"
 
 # Claude provider: Bedrock needs inference profile IDs (us.anthropic.<model>);
 # the first-party API (WIF) uses the plain model names set in the Dockerfile

@@ -64,6 +64,8 @@ Other gaps:
 Decision (2026-10-29): use the SSO permission-set role directly. The federation rule
 matches `sub = arn:aws:iam::539247495490:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_3016282ce18041c3`.
 If the permission set is re-provisioned, the suffix changes and the rule must be updated.
+As a result, `AnthropicWIFStack` (the `anthropic-workload-identity` role) was destroyed
+and `infra/`, `AWS_ROLE_ARN`, and the `wif-deploy`/`wif-describe` targets were removed.
 
 ## Outcome (2026-10-29)
 

@@ -40,7 +40,6 @@ DOCKER_VOLUMES := \
 ### 🚫 Never Store These in `.env`:
 
 ```
-❌ ANTHROPIC_API_KEY=sk-ant-v0-...
 ❌ KIRO_API_KEY=...
 ❌ GH_TOKEN=ghp_...
 ❌ AWS_SECRET_ACCESS_KEY=...
@@ -61,7 +60,6 @@ These are **never committed**, but they're still stored in plaintext on your loc
 ┌─────────────────────────────────────┐
 │ AWS Secrets Manager (persistent)    │
 │ $ make secrets-setup                │
-│   → ANTHROPIC_API_KEY              │
 │   → KIRO_API_KEY                   │
 │   → Custom secrets                 │
 └─────────────────────────────────────┘
@@ -70,8 +68,8 @@ These are **never committed**, but they're still stored in plaintext on your loc
 │ Container Runtime                   │
 │ $ make claude                       │
 │   1. ensure-sso: verify AWS tokens  │
-│   2. fetch-secrets: load from SM    │
-│   3. export-credentials: inject     │
+│   2. export-credentials: inject     │
+│   3. mint WIF token (refreshed 60s) │
 │   4. Launch container               │
 └─────────────────────────────────────┘
 ```
@@ -90,14 +88,10 @@ This creates temporary AWS credentials valid for ~12 hours.
 
 #### Step 2: Store Persistent API Keys in AWS Secrets Manager
 
-Create secrets for anything that doesn't expire:
+Create secrets for anything that doesn't expire. Claude Code needs none: it
+authenticates with Anthropic WIF (see [ANTHROPIC_WIF_SETUP.md](ANTHROPIC_WIF_SETUP.md)).
 
 ```bash
-# Anthropic API key (first-party API, not Bedrock)
-aws secretsmanager create-secret \
-  --name claude/anthropic-api-key \
-  --secret-string 'sk-ant-v0-...'
-
 # Kiro API key (if using Kiro)
 aws secretsmanager create-secret \
   --name kiro/api-key \
@@ -115,8 +109,8 @@ make claude
 
 This target now:
 1. Checks AWS SSO session is valid (`ensure-sso`)
-2. Fetches secrets from Secrets Manager (`fetch-secrets`)
-3. Exports temporary AWS credentials
+2. Exports temporary AWS credentials
+3. Mints the Anthropic WIF identity token (`scripts/with-wif-token.sh`)
 4. Launches Claude Code with context persistence
 
 ### Dockerfile: No Changes Needed
@@ -144,8 +138,7 @@ These come from `aws configure export-credentials` and expire in ~12 hours.
 ### Persistent (From Secrets Manager)
 
 ```bash
-ANTHROPIC_API_KEY=      # Fetched by make fetch-secrets
-KIRO_API_KEY=           # Fetched by make fetch-secrets
+KIRO_API_KEY=           # Secrets Manager or kiro-cli login
 ```
 
 ### Static (From .env or Dockerfile)
@@ -153,7 +146,8 @@ KIRO_API_KEY=           # Fetched by make fetch-secrets
 ```bash
 AWS_PROFILE=AdministratorAccess-539247495490
 AWS_ACCOUNT=539247495490
-ANTHROPIC_MODEL=us.anthropic.claude-haiku-5-5
+ANTHROPIC_MODEL=claude-haiku-5-5        # Dockerfile; Bedrock prefix added when CLAUDE_CODE_USE_BEDROCK=1
+ANTHROPIC_FEDERATION_RULE_ID=fdrl_...   # .env; plus the org, service account, and workspace IDs
 ```
 
 ## Daily Workflow
@@ -169,7 +163,7 @@ make claude
 make claude
 # → ensure-sso: checks if ~12hr session expired
 # → If expired: re-runs sso-login automatically
-# → fetch-secrets: loads ANTHROPIC_API_KEY
+# → mints a fresh WIF identity token for Claude Code
 # → All context from Day 1 is there ✅
 
 # Every ~12 hours after that
@@ -210,12 +204,14 @@ Shows all targets and their purpose.
 make sso-login
 ```
 
-### "ANTHROPIC_API_KEY not set"
+### Claude Code asks to log in
 
 ```bash
-make fetch-secrets
-# Then check: aws secretsmanager list-secrets
+make wif-setup ARGS=--check   # AWS side: federation enabled, token mints
+make wif-test                 # Claude Code in the container answers via WIF
 ```
+
+Also check that the `ANTHROPIC_*` IDs are in `workspace/.env`.
 
 ### Container doesn't have yesterday's context
 
@@ -240,7 +236,7 @@ gh auth login
 | Item | Storage | Injection | TTL |
 |------|---------|-----------|-----|
 | AWS temp tokens | Host system | `aws configure export-credentials` | ~12 hours |
-| ANTHROPIC_API_KEY | AWS Secrets Manager | `aws secretsmanager get-secret-value` | None (persistent) |
+| Anthropic WIF token | Minted on host, mounted read-only | `scripts/with-wif-token.sh` | 15 min, refreshed every 60 s |
 | KIRO_API_KEY | AWS Secrets Manager | Manual or script | None (persistent) |
 | GH_TOKEN | macOS Keychain or Linux secure store | `gh auth login` | None (persistent) |
 | `.env` local vars | Host `.env` file | Docker `--env-file` | None (session) |

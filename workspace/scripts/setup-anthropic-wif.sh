@@ -4,12 +4,12 @@
 #
 # Automates:
 #   1. AWS SSO session check
-#   2. CDK deploy of AnthropicWIFStack (role + sts:GetWebIdentityToken)
-#   3. Account-level outbound web identity federation (enable + issuer URL)
-#   4. Role permission check and a test token mint
+#   2. Account-level outbound web identity federation (enable + issuer URL)
+#   3. A test token mint, printing the subject the Console rule must match
 #
-# Prints the steps that need the Anthropic Console, which has no automation here.
-# Safe to re-run: each step checks current state before changing anything.
+# Tokens are minted with the SSO role's own credentials, so no extra IAM role
+# is needed. Prints the steps that need the Anthropic Console, which has no
+# automation here. Safe to re-run: each step checks current state first.
 #
 # Usage: ./scripts/setup-anthropic-wif.sh [--check]
 #   --check  report current state only; change nothing
@@ -21,13 +21,7 @@ set -euo pipefail
 ACCOUNT_ID="${ACCOUNT_ID:-539247495490}"
 AWS_PROFILE="${AWS_PROFILE:-AdministratorAccess-${ACCOUNT_ID}}"
 REGION="${REGION:-us-east-1}"
-STACK_NAME="AnthropicWIFStack"
-ROLE_NAME="anthropic-workload-identity"
-ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 ANTHROPIC_AUDIENCE="https://api.anthropic.com"
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INFRA_DIR="$(cd "$SCRIPT_DIR/../../infra" && pwd)"
 
 CHECK_ONLY=0
 case "${1:-}" in
@@ -55,24 +49,8 @@ if [ "$CALLER_ACCOUNT" != "$ACCOUNT_ID" ]; then
 fi
 echo "   ✅ Signed in to account $ACCOUNT_ID"
 
-# 2. CDK stack ----------------------------------------------------------------
-step "2. CDK stack $STACK_NAME"
-STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
-  --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_DEPLOYED")
-echo "   current status: $STACK_STATUS"
-if [ "$CHECK_ONLY" -eq 1 ]; then
-  echo "   (check only) would run: npx cdk deploy $STACK_NAME"
-else
-  if [ ! -d "$INFRA_DIR/node_modules" ]; then
-    echo "   installing CDK dependencies in $INFRA_DIR ..."
-    (cd "$INFRA_DIR" && npm ci --silent)
-  fi
-  (cd "$INFRA_DIR" && npx cdk deploy "$STACK_NAME" --require-approval never)
-  echo "   ✅ Stack deployed"
-fi
-
-# 3. Outbound web identity federation -----------------------------------------
-step "3. Outbound web identity federation"
+# 2. Outbound web identity federation -----------------------------------------
+step "2. Outbound web identity federation"
 FED_MODE=apply
 [ "$CHECK_ONLY" -eq 1 ] && FED_MODE=check
 ISSUER=$(python3 -I - "$FED_MODE" <<'PY'
@@ -107,12 +85,12 @@ else
   exit 1
 fi
 
-# 4. Role permission and test token -------------------------------------------
-step "4. Role permission and test token"
+# 3. Test token ---------------------------------------------------------------
+step "3. Test token"
 if [ -z "$ISSUER" ]; then
   echo "   skipped: federation is not enabled yet (run without --check)"
 else
-  python3 -I - "$ROLE_NAME" "$ANTHROPIC_AUDIENCE" <<'PY' || echo "   ⚠️  Token check did not pass; see the message above. Continuing."
+  python3 -I - "$ANTHROPIC_AUDIENCE" <<'PY' || echo "   ⚠️  Token check did not pass; see the message above. Continuing."
 import base64
 import json
 import sys
@@ -120,32 +98,15 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
-role, audience = sys.argv[1], sys.argv[2]
-iam = boto3.client("iam")
-
-granted = False
-for name in iam.list_role_policies(RoleName=role)["PolicyNames"]:
-    doc = iam.get_role_policy(RoleName=role, PolicyName=name)["PolicyDocument"]
-    statements = doc["Statement"] if isinstance(doc["Statement"], list) else [doc["Statement"]]
-    for s in statements:
-        actions = s.get("Action", [])
-        actions = [actions] if isinstance(actions, str) else actions
-        if s.get("Effect") == "Allow" and "sts:GetWebIdentityToken" in actions:
-            granted = True
-
-if granted:
-    print("   ✅ Role grants sts:GetWebIdentityToken")
-else:
-    print("   ❌ Role is missing sts:GetWebIdentityToken (check the CDK deploy)")
-    sys.exit(1)
-
+audience = sys.argv[1]
 sts = boto3.client("sts")
+
 # A freshly enabled account can take a short while before token minting works
 token = None
 for attempt in range(1, 11):
     try:
         token = sts.get_web_identity_token(
-            Audience=[audience], SigningAlgorithm="ES384", DurationSeconds=300
+            Audience=[audience], SigningAlgorithm="RS256", DurationSeconds=300
         )["WebIdentityToken"]
         break
     except ClientError as e:
@@ -161,27 +122,24 @@ print("   (the Console federation rule must match this subject)")
 PY
 fi
 
-# 5. Anthropic Console --------------------------------------------------------
-step "5. Anthropic Console"
+# 4. Anthropic Console --------------------------------------------------------
+step "4. Anthropic Console"
 if [ -n "${ANTHROPIC_ORGANIZATION_ID:-}" ] && [ -n "${ANTHROPIC_FEDERATION_RULE_ID:-}" ] \
    && [ -n "${ANTHROPIC_SERVICE_ACCOUNT_ID:-}" ]; then
-  echo "   ✅ ANTHROPIC_* federation IDs are set in the environment; nothing to do"
+  echo "   ✅ ANTHROPIC_* federation IDs are set; run 'make wif-test' to check Claude Code"
 else
   echo "   The Anthropic side is not automated here (the Admin API route is not wired up)."
   manual "Console → Workload identity → Connect workload → AWS"
   echo "       Issuer URL : ${ISSUER:-<not enabled yet; run this script without --check>}"
   echo "       Audience   : $ANTHROPIC_AUDIENCE"
-  echo "       Role ARN   : the token subject printed in step 4 (your SSO role)"
+  echo "       Role ARN   : the token subject printed in step 3 (your SSO role)"
   manual "Record the IDs: fdrl_... (federation rule), svac_... (service account),"
   echo "       wrkspc_... (optional workspace), and the org ID (Settings → Organization)"
-  manual "Add them to workspace/.env, then run 'make wif-setup' again to confirm:"
+  manual "Add them to workspace/.env, then run 'make wif-test':"
   echo "       ANTHROPIC_ORGANIZATION_ID=<org id>"
   echo "       ANTHROPIC_FEDERATION_RULE_ID=fdrl_..."
   echo "       ANTHROPIC_SERVICE_ACCOUNT_ID=svac_..."
   echo "       ANTHROPIC_WORKSPACE_ID=wrkspc_...   # optional"
-  manual "Repo follow-up (not done by this script): pass these through DEV_ENV in"
-  echo "       workspace/Makefile, mint the identity token before each exchange,"
-  echo "       and switch the Dockerfile model IDs to first-party names."
 fi
 
 echo

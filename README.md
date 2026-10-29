@@ -156,12 +156,12 @@ Create `.env` file in workspace directory, or export before running:
 ```bash
 AWS_PROFILE=AdministratorAccess-539247495490
 AWS_REGION=us-east-1
-AWS_ROLE_ARN=arn:aws:iam::539247495490:role/anthropic-workload-identity
+ANTHROPIC_FEDERATION_RULE_ID=fdrl_...   # plus the org, service account, and workspace IDs
 KIRO_API_KEY=your-key-here
 GH_TOKEN=github_token_here
 ```
 
-**Anthropic Authentication**: Uses Workload Identity Federation (WIF) — no API keys stored. See [docs/ANTHROPIC_WIF_SETUP.md](docs/ANTHROPIC_WIF_SETUP.md).
+**Anthropic Authentication**: Uses Workload Identity Federation (WIF) — no API keys stored. Set up with `make wif-setup`, check with `make wif-test`. See [docs/ANTHROPIC_WIF_SETUP.md](docs/ANTHROPIC_WIF_SETUP.md).
 
 ## Make Commands
 

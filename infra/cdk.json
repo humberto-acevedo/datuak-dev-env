@@ -1,7 +1,0 @@
-{
-  "app": "npx ts-node lib/anthropic-wif-stack.ts",
-  "context": {
-    "awsAccount": "539247495490",
-    "awsRegion": "us-east-1"
-  }
-}

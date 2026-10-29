@@ -18,6 +18,12 @@ TOOLS_CODE_DIR=$(HOME)/Development/tools-code
 LATEST_PYTHON ?= 3.12
 LATEST_NODE   ?= 22
 
+# Claude provider: 0 = first-party Anthropic API via WIF (default), 1 = AWS Bedrock.
+# Model names live in the Dockerfile; the entrypoint adds the Bedrock prefix when this is 1.
+# Switch per run with `make claude CLAUDE_CODE_USE_BEDROCK=1`, or set it in .env.
+CLAUDE_CODE_USE_BEDROCK ?= 0
+WIF_TOKEN_ROOT ?= $(HOME)/.cache/datuak-wif
+
 # Resolve GitHub token from host's gh CLI (reads macOS Keychain when needed).
 # Must be defined before DEV_ENV since := is an immediate assignment.
 # On a new host: run `gh auth login` once so the Keychain (macOS) or token file (Linux) is populated,
@@ -32,6 +38,7 @@ DEV_ENV := \
 	-e AWS_REGION \
 	-e AWS_ACCOUNT \
 	-e AWS_ROLE_ARN=$(AWS_ROLE_ARN) \
+	-e CLAUDE_CODE_USE_BEDROCK=$(CLAUDE_CODE_USE_BEDROCK) \
 	-e KIRO_API_KEY \
 	-e GH_TOKEN \
 	$(if $(_gh_token),-e GH_TOKEN=$(_gh_token)) \
@@ -59,7 +66,26 @@ DOCKER_VOLUMES := \
 	$(_vol_ssh) \
 	$(_vol_ssh_agent)
 
-DOCKER_RUN := docker run -it --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
+# First-party API: pass the WIF IDs, and mount the identity token the host mints into a
+# per-run directory (WIF_TOKEN_DIR, set by _run-with-creds). Bedrock gets neither, since
+# Claude Code would otherwise try federation instead of Bedrock.
+ifeq ($(CLAUDE_CODE_USE_BEDROCK),1)
+_wif_run_args :=
+else
+_wif_run_args := \
+	-e ANTHROPIC_ORGANIZATION_ID \
+	-e ANTHROPIC_FEDERATION_RULE_ID \
+	-e ANTHROPIC_SERVICE_ACCOUNT_ID \
+	-e ANTHROPIC_WORKSPACE_ID \
+	-v "$$WIF_TOKEN_DIR":/run/anthropic-wif:ro \
+	-e ANTHROPIC_IDENTITY_TOKEN_FILE=/run/anthropic-wif/token
+endif
+
+# Interactive TTY only when make runs in a terminal, so wif-test also works from scripts
+DOCKER_TTY := $(shell [ -t 0 ] && echo -it || echo -i)
+
+DOCKER_RUN := docker run $(DOCKER_TTY) --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) \
+	$(_wif_run_args) \
 	$(_env_ssh_agent) \
 	-e GIT_CONFIG_COUNT=1 \
 	-e GIT_CONFIG_KEY_0=safe.directory \
@@ -135,9 +161,13 @@ wif-describe: ensure-sso
 	@echo "🔍 Getting WIF role information..."
 	@aws cloudformation describe-stacks --stack-name AnthropicWIFStack --region $(REGION) --query 'Stacks[0].Outputs' --output table 2>/dev/null || echo "❌ Stack not found. Run 'make wif-deploy' first."
 
+# End-to-end check: Claude Code in the container must answer without a login prompt
 wif-test: ensure-sso
-	@echo "✅ Testing Anthropic WIF authentication..."
-	@aws sts get-caller-identity | grep -q '"Account"' && echo "✅ AWS credentials valid" || echo "❌ AWS credentials invalid"
+	@echo "🧪 Testing Claude Code auth in the container (CLAUDE_CODE_USE_BEDROCK=$(CLAUDE_CODE_USE_BEDROCK))..."
+	$(call _run-with-creds,claude -p "Reply with exactly: AUTH OK")
+
+wif-setup: ensure-sso
+	@bash scripts/setup-anthropic-wif.sh $(ARGS)
 
 wif-docs:
 	@echo "📖 Anthropic WIF Documentation: see docs/ANTHROPIC_WIF_SETUP.md"
@@ -190,7 +220,13 @@ list-remote-contexts:
 	@echo "📋 Remote Claude contexts in S3:"
 	@aws s3 ls s3://$(CLAUDE_CONTEXT_BUCKET)/ --region $(REGION) --profile $(AWS_PROFILE) --recursive | grep -E "(sessions|skills|memory|settings)" || echo "  (none found)"
 
+ifeq ($(CLAUDE_CODE_USE_BEDROCK),1)
 _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && $(DOCKER_RUN) $(1)
+else
+_run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
+	mkdir -p "$(WIF_TOKEN_ROOT)" && export WIF_TOKEN_DIR=$$(mktemp -d "$(WIF_TOKEN_ROOT)/run.XXXXXX") && \
+	bash scripts/with-wif-token.sh $(DOCKER_RUN) $(1)
+endif
 
 
 # Interactive targets (all fetch temporary AWS STS credentials via SSO)
@@ -288,10 +324,14 @@ verify: ensure-sso
 		chk "AWS MCP → Kiro"             grep -q mcp-proxy-for-aws $$HOME/.kiro/settings/mcp.json; \
 		chk "USAFacts → Claude"          grep -q usafacts $$HOME/.claude.json; \
 		chk "USAFacts → Kiro"            grep -q usafacts $$HOME/.kiro/settings/mcp.json; \
-		echo "Model config:"; \
-		chk "Haiku 5.5 default"          grep -q us.anthropic.claude-haiku-5-5 $$HOME/.claude/settings.json; \
-		chk "Sonnet 5.5"                 grep -q us.anthropic.claude-sonnet-5-5 $$HOME/.claude/settings.json; \
-		chk "Opus 5.5"                   grep -q us.anthropic.claude-opus-5-5 $$HOME/.claude/settings.json; \
+		echo "Model config (CLAUDE_CODE_USE_BEDROCK=$$CLAUDE_CODE_USE_BEDROCK):"; \
+		chk "ANTHROPIC_MODEL=$$ANTHROPIC_MODEL"   test -n "$$ANTHROPIC_MODEL"; \
+		if [ "$$CLAUDE_CODE_USE_BEDROCK" = 1 ]; then \
+			chk "Bedrock model IDs"      test "$${ANTHROPIC_MODEL#us.anthropic.}" != "$$ANTHROPIC_MODEL"; \
+		else \
+			chk "First-party model IDs"  test "$${ANTHROPIC_MODEL#us.anthropic.}" = "$$ANTHROPIC_MODEL"; \
+			chk "WIF federation IDs"     test -n "$$ANTHROPIC_FEDERATION_RULE_ID" -a -n "$$ANTHROPIC_SERVICE_ACCOUNT_ID" -a -n "$$ANTHROPIC_ORGANIZATION_ID"; \
+		fi; \
 		echo "Tools:"; \
 		chk "claude"    command -v claude; \
 		chk "agy"       command -v agy; \
@@ -341,6 +381,8 @@ help:
 	@echo "  make sso-login               Refresh AWS SSO session (called automatically)"
 	@echo "  make ensure-sso              Check SSO session validity"
 	@echo "  make secrets-setup           Show how to create AWS Secrets Manager entries"
+	@echo "  make wif-setup               Configure the AWS side of Anthropic WIF (ARGS=--check: read-only)"
+	@echo "  make wif-test                Check that Claude Code in the container authenticates"
 	@echo ""
 	@echo "⚙️  CONTEXT PERSISTENCE:"
 	@echo "  ~/.claude/                   Claude Code sessions, settings, skills, memory (mounted)"
@@ -385,6 +427,7 @@ help:
 	@echo "📝 ENVIRONMENT:"
 	@echo "  AWS_PROFILE                  AWS SSO profile (default: $(AWS_PROFILE))"
 	@echo "  REGION                       AWS region (default: $(REGION))"
+	@echo "  CLAUDE_CODE_USE_BEDROCK      0 = Anthropic API via WIF, 1 = AWS Bedrock (default: $(CLAUDE_CODE_USE_BEDROCK))"
 	@echo "  LATEST_PYTHON                Python version for 'build-latest' (default: $(LATEST_PYTHON))"
 	@echo "  LATEST_NODE                  Node version for 'build-latest' (default: $(LATEST_NODE))"
 	@echo ""

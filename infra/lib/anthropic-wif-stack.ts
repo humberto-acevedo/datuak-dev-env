@@ -33,6 +33,19 @@ export class AnthropicWIFStack extends cdk.Stack {
       })
     );
 
+    // Allow minting the web identity JWT that Anthropic exchanges for an access token
+    anthropicRole.attachInlinePolicy(
+      new iam.Policy(this, 'WebIdentityTokenAccess', {
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['sts:GetWebIdentityToken'],
+            resources: ['*'],
+          }),
+        ],
+      })
+    );
+
     new cdk.CfnOutput(this, 'RoleArn', {
       value: anthropicRole.roleArn,
       description: 'IAM Role ARN for Anthropic WIF (set AWS_ROLE_ARN to this)',

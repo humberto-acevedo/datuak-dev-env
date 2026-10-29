@@ -192,8 +192,8 @@ kiro_servers   = build_mcp_servers(registry, "kiro")
 
 claude_settings_cfg = {
     "permissions": {"aws:*": "allow"},
+    # CLAUDE_CODE_USE_BEDROCK is passed at runtime by the Makefile; settings env would override it
     "env": {
-        "CLAUDE_CODE_USE_BEDROCK": "0",
         "AWS_REGION": region,
     },
 }
@@ -231,11 +231,14 @@ print(f"   AGY:    {list(agy_servers.keys())}")
 print(f"   Kiro:   {list(kiro_servers.keys())}")
 PYEOF
 
-# === Layer 16: Environment variables (Bedrock, Claude models, SDK config) ===
-ENV ANTHROPIC_MODEL=us.anthropic.claude-haiku-5-5
-ENV ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-5-5
-ENV ANTHROPIC_LARGE_MODEL=us.anthropic.claude-opus-5-5
-ENV ANTHROPIC_ULTRA_FAST_MODEL=us.anthropic.claude-haiku-5-5
+# === Layer 16: Environment variables (Claude models, SDK config) ===
+# First-party model names. With CLAUDE_CODE_USE_BEDROCK=1 the entrypoint prefixes
+# them with "us.anthropic." to get the Bedrock inference profile IDs.
+# ANTHROPIC_MODEL is the default; the DEFAULT_* variables pin the opus/sonnet/haiku aliases.
+ENV ANTHROPIC_MODEL=claude-haiku-5-5
+ENV ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-5-5
+ENV ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-5-5
+ENV ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-haiku-5-5
 ENV AWS_REGION=us-east-1
 ENV CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
 ENV CLAUDE_CODE_ENTRYPOINT=cli

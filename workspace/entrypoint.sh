@@ -14,6 +14,23 @@ else
   echo "   → Using Global endpoints (cost-efficient)"
 fi
 
+# Claude provider: Bedrock needs inference profile IDs (us.anthropic.<model>);
+# the first-party API (WIF) uses the plain model names set in the Dockerfile
+if [[ "${CLAUDE_CODE_USE_BEDROCK:-0}" == "1" ]]; then
+  for var in ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
+    if [[ -n "${!var:-}" && "${!var}" != us.anthropic.* ]]; then
+      export "$var=us.anthropic.${!var}"
+    fi
+  done
+  echo "   → Claude provider: AWS Bedrock ($ANTHROPIC_MODEL)"
+else
+  echo "   → Claude provider: Anthropic API via WIF ($ANTHROPIC_MODEL)"
+  if [[ -z "${ANTHROPIC_FEDERATION_RULE_ID:-}" || ! -s "${ANTHROPIC_IDENTITY_TOKEN_FILE:-/nonexistent}" ]]; then
+    echo "⚠️  WIF is not fully configured (federation IDs or identity token missing); Claude Code will ask to log in." >&2
+    echo "   Launch through the Makefile (make claude) with the ANTHROPIC_* IDs set in .env." >&2
+  fi
+fi
+
 # Attempt initial clock sync on startup (script baked into image)
 # Use --max-time 8 to allow DNS resolution time; continue on timeout
 /usr/local/bin/sync-time || true

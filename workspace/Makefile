@@ -213,6 +213,7 @@ else
 _run-with-creds = @eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
 	mkdir -p "$(WIF_TOKEN_ROOT)" && export WIF_TOKEN_DIR=$$(mktemp -d "$(WIF_TOKEN_ROOT)/run.XXXXXX") && \
 	bash scripts/with-wif-token.sh $(DOCKER_RUN) $(1)
+_wif_token_prefix = mkdir -p "$(WIF_TOKEN_ROOT)" && export WIF_TOKEN_DIR=$$(mktemp -d "$(WIF_TOKEN_ROOT)/run.XXXXXX") && bash scripts/with-wif-token.sh
 endif
 
 
@@ -295,7 +296,7 @@ clean:
 
 verify: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \
-	docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) $(_wif_ids) $(IMAGE_NAME) bash -c '\
+	$(_wif_token_prefix) docker run --rm --cap-add=SYS_TIME $(DOCKER_VOLUMES) $(DEV_ENV) $(_wif_run_args) $(IMAGE_NAME) bash -c '\
 		FAIL=0; \
 		chk() { local label=$$1; shift; "$$@" >/dev/null 2>&1 && echo "  ✅ $$label" || { echo "  ❌ $$label"; FAIL=1; }; }; \
 		aws sts get-caller-identity >/tmp/_aws 2>&1 & \
@@ -318,6 +319,7 @@ verify: ensure-sso
 		else \
 			chk "First-party model IDs"  test "$${ANTHROPIC_MODEL#us.anthropic.}" = "$$ANTHROPIC_MODEL"; \
 			chk "WIF federation IDs"     test -n "$$ANTHROPIC_FEDERATION_RULE_ID" -a -n "$$ANTHROPIC_SERVICE_ACCOUNT_ID" -a -n "$$ANTHROPIC_ORGANIZATION_ID"; \
+			chk "WIF identity token"    test -s "$$ANTHROPIC_IDENTITY_TOKEN_FILE"; \
 		fi; \
 		echo "Tools:"; \
 		chk "claude"    command -v claude; \

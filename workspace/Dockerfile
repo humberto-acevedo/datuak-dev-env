@@ -209,7 +209,6 @@ kiro_cfg = {
 
 os.makedirs("/home/devuser/.mcp",                  exist_ok=True)
 os.makedirs("/home/devuser/.claude",               exist_ok=True)
-os.makedirs("/home/devuser/.gemini/config",        exist_ok=True)
 os.makedirs("/home/devuser/.kiro/settings",        exist_ok=True)
 
 with open("/home/devuser/.mcp/registry.json",             "w") as f:
@@ -217,14 +216,18 @@ with open("/home/devuser/.mcp/registry.json",             "w") as f:
 # mcpServers must live in ~/.claude.json (user state); settings.json does not expose MCP servers to /mcp
 with open("/home/devuser/.claude.json",                   "w") as f:
     json.dump(claude_state_cfg, f, indent=2)
+# TODO: ~/.claude is mounted from the host, which hides this file at runtime (pending:
+# merge additively at container start, like AGY; see docs/CLAUDE_CONTEXT_SETUP.md)
 with open("/home/devuser/.claude/settings.json",          "w") as f:
     json.dump(claude_settings_cfg, f, indent=2)
-with open("/home/devuser/.gemini/config/mcp_config.json", "w") as f:
+# ~/.gemini is mounted from the host, so the entrypoint merges this into
+# ~/.gemini/config/mcp_config.json on every start
+with open("/home/devuser/.mcp/agy_mcp_config.json",       "w") as f:
     json.dump(agy_cfg, f, indent=2)
 with open("/home/devuser/.kiro/settings/mcp.json",        "w") as f:
     json.dump(kiro_cfg, f, indent=2)
 
-os.system("chown -R devuser:devuser /home/devuser/.mcp /home/devuser/.claude /home/devuser/.gemini /home/devuser/.kiro")
+os.system("chown -R devuser:devuser /home/devuser/.mcp /home/devuser/.claude /home/devuser/.kiro")
 print(f"✅ MCP registry written  ({len(registry['servers'])} servers)")
 print(f"   Claude: {list(claude_servers.keys())}")
 print(f"   AGY:    {list(agy_servers.keys())}")

@@ -54,9 +54,47 @@ else
   echo "⚠️  uv not found in PATH - AWS MCP proxy may not work"
 fi
 
-# Verify Antigravity (AGY) MCP configuration exists (generated at build time)
-if [[ ! -s "${HOME}/.gemini/config/mcp_config.json" ]]; then
-  echo "⚠️  Warning: AGY MCP configuration not found. This should have been generated at build time."
+# Merge the registry's AGY MCP servers into ~/.gemini, which is mounted from the host and
+# hides anything written there at build time. Registry servers are refreshed; servers
+# added with `agy mcp add` and the `disabled` flag set by `agy mcp disable` are kept.
+AGY_MCP_SOURCE=/home/devuser/.mcp/agy_mcp_config.json
+AGY_MCP_TARGET="${HOME}/.gemini/config/mcp_config.json"
+if [[ -s "$AGY_MCP_SOURCE" ]]; then
+  if python3 -I - "$AGY_MCP_SOURCE" "$AGY_MCP_TARGET" <<'PY'
+import json
+import os
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+registry_servers = json.load(open(src))["mcpServers"]
+
+cfg = {}
+if os.path.exists(dst):
+    try:
+        cfg = json.load(open(dst))
+    except ValueError:
+        sys.exit(f"{dst} is not valid JSON; left unchanged")
+
+servers = cfg.setdefault("mcpServers", {})
+for name, server in registry_servers.items():
+    merged = dict(server)
+    if servers.get(name, {}).get("disabled"):
+        merged["disabled"] = True
+    servers[name] = merged
+
+os.makedirs(os.path.dirname(dst), exist_ok=True)
+tmp = dst + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(cfg, f, indent=2)
+os.replace(tmp, dst)
+PY
+  then
+    echo "✅ AGY MCP servers merged into ~/.gemini/config/mcp_config.json"
+  else
+    echo "⚠️  Could not merge AGY MCP servers (see message above)" >&2
+  fi
+else
+  echo "⚠️  AGY MCP registry config missing from the image ($AGY_MCP_SOURCE)" >&2
 fi
 
 # If launching agy, fetch the API key from Secrets Manager (with timeout to prevent hang)

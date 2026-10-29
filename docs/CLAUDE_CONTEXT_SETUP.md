@@ -243,3 +243,16 @@ gh auth login
 | Claude context | Host `~/.claude` dir | Docker volume mount | None (persistent) |
 
 **Key principle:** Permanent credentials live in AWS Secrets Manager. Temporary credentials are short-lived and auto-refreshed. Nothing is hardcoded in images or containers.
+
+## Pending: image Claude settings are hidden
+
+The image writes `~/.claude/settings.json` at build time (the `aws:*` permission and
+`AWS_REGION` env), but `make` mounts the host `~/.claude` over it, so those settings
+never apply in the container. AGY had the same problem with `~/.gemini`; the entrypoint
+now merges its MCP servers at container start.
+
+Planned fix: merge the image settings into the mounted file at start, additively
+(add missing keys only). Because `~/.claude` syncs to S3 and is shared by every host,
+including Claude Code on the Mac, only host-safe keys may be merged. Container-specific
+values (provider switch, model names) stay in the image ENV and the Makefile: a
+`CLAUDE_CODE_USE_BEDROCK` key in the settings `env` block overrides `docker run -e`.

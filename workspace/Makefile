@@ -223,25 +223,25 @@ claude: ensure-sso sync-from-s3
 	@echo "🚀 Launching Claude Code (using Anthropic WIF)..."
 	@$(call _run-with-creds,claude)
 	@echo "📤 Syncing context back to S3..."
-	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
+	@$(MAKE) --no-print-directory sync-to-s3
 
 antigravity agy: ensure-sso sync-from-s3
 	@echo "🚀 Launching Antigravity..."
 	@$(call _run-with-creds,agy)
 	@echo "📤 Syncing context back to S3..."
-	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
+	@$(MAKE) --no-print-directory sync-to-s3
 
 kiro: ensure-sso sync-from-s3
 	@echo "🚀 Launching Kiro..."
 	@$(call _run-with-creds,kiro-cli)
 	@echo "📤 Syncing context back to S3..."
-	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
+	@$(MAKE) --no-print-directory sync-to-s3
 
 shell: ensure-sso sync-from-s3
 	@echo "🚀 Launching shell..."
 	@$(call _run-with-creds,/bin/bash)
 	@echo "📤 Syncing context back to S3..."
-	@$(call _run-with-creds,$(MAKE) --no-print-directory sync-to-s3)
+	@$(MAKE) --no-print-directory sync-to-s3
 
 debug-shell: ensure-sso
 	@eval $$(aws configure export-credentials --profile $(AWS_PROFILE) --format env) && \

@@ -5,6 +5,63 @@ set -eo pipefail
 # Tools (claude, agy, kiro) are installed globally to /usr/local/bin at build time
 # so no extra PATH manipulation is needed here.
 
+# ============================================================================
+# MODE: Check if called for exit-sync only (trap handler) vs normal startup
+# ============================================================================
+if [[ "${ENTRYPOINT_MODE:-}" == "exit-sync" ]]; then
+  # Exit-sync-only mode: sync to S3, no startup sequence
+  _sync_to_s3() {
+    echo "📤 Syncing context back to S3..."
+
+    # Check if ~/.claude exists
+    if [ ! -d "${HOME}/.claude" ]; then
+      echo "⚠️  ~/.claude does not exist — nothing to sync"
+      exit 0
+    fi
+
+    # Determine AWS profile and region
+    AWS_PROFILE="${AWS_PROFILE:-AdministratorAccess-539247495490}"
+    REGION="${AWS_REGION:-us-east-1}"
+    ACCOUNT_ID="${ACCOUNT_ID:-539247495490}"
+    CLAUDE_CONTEXT_BUCKET="claude-context-${ACCOUNT_ID}"
+
+    # Clean up symlinks before sync
+    find -L "${HOME}/.claude" -maxdepth 3 -type l -delete 2>/dev/null || true
+
+    # Sync to S3
+    aws s3 sync \
+      "${HOME}/.claude" \
+      "s3://${CLAUDE_CONTEXT_BUCKET}/.claude" \
+      --region "${REGION}" \
+      --profile "${AWS_PROFILE}" \
+      --delete \
+      --sse AES256 \
+      --exclude "*.tmp" \
+      --exclude ".git/*" \
+      --exclude "*.lock" \
+      --exclude ".DS_Store" \
+      --exclude "debug/*" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+      echo "✅ Context synced to S3"
+    else
+      echo "⚠️  S3 sync failed (credentials or network issue)"
+    fi
+
+    exit 0
+  }
+
+  _sync_to_s3
+  exit 0
+fi
+
+# ============================================================================
+# NORMAL STARTUP MODE: Full initialization sequence
+# ============================================================================
+
+# On exit: call this script in exit-sync mode (trap handler)
+trap 'ENTRYPOINT_MODE=exit-sync exec /usr/local/bin/entrypoint.sh' EXIT
+
 echo "🤖 Claude Code configuration"
 
 # Claude provider: Bedrock needs inference profile IDs (us.anthropic.<model>);

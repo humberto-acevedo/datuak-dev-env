@@ -274,7 +274,7 @@ SCRIPT
 RUN chmod +x /usr/local/bin/sync-time && \
     ln -sf /usr/local/bin/sync-time /usr/local/bin/sync-clock
 
-# === Layer 18: Entrypoint (final COPY layer) ===
+# === Layer 18: Entrypoint ===
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # === Layer 19: Runtime setup (non-root user, workdir) ===
